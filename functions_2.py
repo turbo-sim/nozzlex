@@ -571,7 +571,7 @@ def postprocess_ode(t, y, ode_handle):
     and for each time point, it calls a user-defined ODE handling function to
     process the state of the ODE system. It collects the results into a
     dictionary where each key corresponds to a state variable and the values
-    are numpy arrays of that state variable at each integration step
+    are numpy arrays of that state variable at each integration step.
 
     Parameters
     ----------
@@ -582,19 +582,28 @@ def postprocess_ode(t, y, ode_handle):
         n is the number of points and m is the number of state variables.
     ode_handle : callable
         A function that takes in a integration point and state vector and returns a tuple,
-        where the first element is ignored (can be None) and the second element
-        is a dictionary representing the processed state of the system.
+        where the first element is ignored, the second is a dictionary representing the processed state,
+        and the third is a flag (0 or 1) indicating singularity.
 
     Returns
     -------
     ode_out : dict
         A dictionary where each key corresponds to a state variable and each value
         is a numpy array containing the values of that state variable at each integration step.
+        Also includes "singularity_detected" key with a boolean flag.
     """
     # Initialize ode_out as a dictionary
     ode_out = {}
+    singularity_detected = False
+
     for t_i, y_i in zip(t, y.T):
-        _, out = ode_handle(t_i, y_i)
+        _, out, flag, flag_2 = ode_handle(t_i, y_i)
+
+        if flag == 1:
+            singularity_detected = True
+        
+        if flag_2 == 1:
+            subsonic_detected = True
 
         for key, value in out.items():
             # Initialize with an empty list
@@ -606,6 +615,10 @@ def postprocess_ode(t, y, ode_handle):
     # Convert lists to numpy arrays
     for key in ode_out:
         ode_out[key] = np.array(ode_out[key])
+
+    # Add singularity info
+    ode_out["singularity_detected"] = singularity_detected
+    ode_out["subsonic_detected"] = subsonic_detected
 
     return ode_out
 
@@ -755,7 +768,7 @@ def pipeline_steady_state_1D(
     elif mach_in is not None:
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
-        mach_impossible = 0.99
+        mach_impossible = 0.7
         mach_possible = 0.1
         u_impossible = mach_impossible*speed_sound_in
         u_possible = mach_possible*speed_sound_in
@@ -808,10 +821,12 @@ def pipeline_steady_state_1D(
         )
 
         determinant = det(M)
-        
-        singularity = False
-        if determinant < 1e-6:
-            singularity = True
+
+        # If singularity detected
+        flag = 0
+        flag_2 = 1
+        if abs(determinant) < 1:
+            flag = 1
 
         # Right-hand side of the system
         G = 1 / T  # For perfect gases
@@ -856,7 +871,7 @@ def pipeline_steady_state_1D(
         # Append the output dictionary to out_list
         out_list.append(out)
 
-        return dy, out
+        return dy, out, flag, flag_2
     
     # Possible-impossible flow (PIF) algorithm to find critical flow rate
     if critical_flow is True: 
@@ -873,42 +888,37 @@ def pipeline_steady_state_1D(
         )
         solution = postprocess_ode(solution.t, solution.y, odefun)
 
-        flag = 1
-        while flag == 1:
+        while solution["singularity_detected"] == True:
+            m_impossible = m_impossible - m_impossible * 0.005
+            m_possible = m_possible  
+            u_guess = (m_impossible+m_possible) / (2*density_in * area_in)
+            solution = scipy.integrate.solve_ivp(
+                lambda t, y: odefun(t, y)[0],
+                [0.0, length],
+                [u_guess, density_in, pressure_in],
+                t_eval=np.linspace(0, length, number_of_points) if number_of_points else None,
+                method="RK45",
+                rtol=1e-9,
+                atol=1e-9,
+            )
+            solution = postprocess_ode(solution.t, solution.y, odefun)
+
+        while (abs((solution["mach_number"][-1] - 1)) > 0.001):
             pif_iterations += 1
-            flag = 0
-            if (abs((solution["mach_number"][-1] - 1)) > 0.001): # The solution is in the possible region (subsonic)
-                m_possible = m_possible + m_possible * 0.01
-                m_impossible = m_impossible  
-                u_guess = (m_impossible+m_possible) / (2*density_in * area_in)
-                solution = scipy.integrate.solve_ivp(
-                    lambda t, y: odefun(t, y)[0],
-                    [0.0, length],
-                    [u_guess, density_in, pressure_in],
-                    t_eval=np.linspace(0, length, number_of_points) if number_of_points else None,
-                    method="RK45",
-                    rtol=1e-9,
-                    atol=1e-9,
-                )
-                solution = postprocess_ode(solution.t, solution.y, odefun)
-                flag = 1
-
-            if (abs(solution["distance"][-1] - length) > 0.001): # The solution is in the impossible region
-                m_impossible = m_impossible - m_impossible * 0.01
-                m_possible = m_possible  
-                u_guess = (m_impossible+m_possible) / (2*density_in * area_in)
-                solution = scipy.integrate.solve_ivp(
-                    lambda t, y: odefun(t, y)[0],
-                    [0.0, length],
-                    [u_guess, density_in, pressure_in],
-                    t_eval=np.linspace(0, length, number_of_points) if number_of_points else None,
-                    method="RK45",
-                    rtol=1e-9,
-                    atol=1e-9,
-                )
-                solution = postprocess_ode(solution.t, solution.y, odefun)
-                flag = 1
-
+            m_possible = m_possible + m_possible * 0.01
+            m_impossible = m_impossible  
+            u_guess = (m_impossible+m_possible) / (2*density_in * area_in)
+            solution = scipy.integrate.solve_ivp(
+                lambda t, y: odefun(t, y)[0],
+                [0.0, length],
+                [u_guess, density_in, pressure_in],
+                t_eval=np.linspace(0, length, number_of_points) if number_of_points else None,
+                method="RK45",
+                rtol=1e-9,
+                atol=1e-9,
+            )
+            solution = postprocess_ode(solution.t, solution.y, odefun)
+        
         flow_rate = u_guess*area_in*density_in
     else:
         pif_iterations = None

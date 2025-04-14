@@ -1,10 +1,7 @@
-import numpy as np
 import matplotlib.pyplot as plt
-import CoolProp.CoolProp as CP
 import perfect_gas_props 
 import numpy as np
-from scipy.linalg import det
-import functions as functions 
+import functions_2 as functions 
 import yaml
 import time
 import os
@@ -52,7 +49,7 @@ print("Mach at the throat:                        ", f"{solution["mach_number"][
 print("Critical lenght:                           ", f"{solution["distance"][-1]:.4f}", "(m)")
 print("Flow rate:                                 ", f"{flow_rate:.4f}", "(kg/s)")
 print("PIF number of iterations:                  ", pif_iterations)
-print("Computation duration:                      ", f"{duration:.4f} seconds")
+print("Computation time:                          ", f"{duration:.4f} seconds")
 
 
 
@@ -81,16 +78,16 @@ ax.plot(
     markerfacecolor="w",
     label=r"$v/v_{\mathrm{in}}$",
 )
-ax.plot(
-    solution["distance"],
-    solution["temperature"] / solution["temperature"][0],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label=r"$T/T_{\mathrm{in}}$",
-)
+# ax.plot(
+#     solution["distance"],
+#     solution["temperature"] / solution["temperature"][0],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label=r"$T/T_{\mathrm{in}}$",
+# )
 ax.plot(
     solution["distance"],
     solution["mach_number"],
@@ -105,11 +102,10 @@ ax.legend(loc="best")
 figure.tight_layout(pad=1)
 
 plt.figure()
-determinants = [entry['determinant'] for entry in out]
-x = np.linspace(0, length, len(determinants))
+x = np.linspace(0, length, len(solution["determinant"]))
 plt.ylabel("Jacobian determinant")
 plt.xlabel("Axis position (m)")
-plt.plot(x, determinants)
+plt.plot(x, solution["determinant"])
 plt.tight_layout()
 
 # Plot numerical integration error
