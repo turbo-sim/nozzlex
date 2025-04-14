@@ -1,6 +1,6 @@
 # This script should be used in turboflow for thermodynamic property calculations 
 
-import perfect_gas_props_functions
+from . import perfect_gas_props_functions
 import numpy as np
 from barotropy import print_dict
 

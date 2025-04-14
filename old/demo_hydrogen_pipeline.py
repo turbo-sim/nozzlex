@@ -1,4 +1,4 @@
-import functions as functions
+import functions_backup as functions_backup
 import matplotlib.pyplot as plt
 
 def psig_to_Pa(x):
@@ -19,7 +19,7 @@ diameter_in = in_to_m(20)
 roughness = 10e-6
 
 # Calculate solution
-solution = functions.pipeline_steady_state_1D(
+solution = functions_backup.pipeline_steady_state_1D(
     fluid_name=fluid_name,
     pressure_in=p_in,
     temperature_in=T_in,
@@ -37,8 +37,8 @@ print(f"Mass flow rate: {solution['mass_flow'][-1]:0.2f} kg/s")
 
 
 # Create figure and first axis
-functions.set_plot_options(grid=True)
-colors = functions.COLORS_MATLAB
+functions_backup.set_plot_options(grid=True)
+colors = functions_backup.COLORS_MATLAB
 figure, ax1 = plt.subplots(figsize=(6.0, 4.8))
 ax1.set_title("Flow in a hydrogen pipeline")
 ax1.set_xlabel("Pipeline distance [km]")
@@ -82,7 +82,7 @@ ax2.set_ylim([0, 0.2])
 
 
 # Plot evolution of flow variables
-functions.set_plot_options()
+functions_backup.set_plot_options()
 figure, ax = plt.subplots(figsize=(6.0, 4.8))
 ax.set_xlabel("Pipeline distance [km]")
 ax.set_ylabel("Normalized flow variables")

@@ -1,6 +1,6 @@
 boundary_conditions:
-  p_stagnation:  10e5
-  T_stagnation: 500
+  p_stagnation:  101325
+  T_stagnation: 300
   critical_flow: True # If True the PIF will be performed
   mach_inlet: None
   mass_flow_inlet: None
@@ -8,7 +8,6 @@ boundary_conditions:
 # Numerical settings
 numerical_settings:
   Nx: 600 # Number of cells
-  
  
 nozzle_parameters:
   type: planar # Planar or ciircular (still to be implemented)
@@ -18,5 +17,5 @@ nozzle_parameters:
  
 fluid:
   perfect_gas: false
-  fluid_name: CO2
+  fluid_name: nitrogen
  

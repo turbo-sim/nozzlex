@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
-import perfect_gas_props 
+from perfect_gas_prop import perfect_gas_prop
+from real_gas_prop import real_gas_prop
 import numpy as np
-import functions_2 as functions 
+import functions_2 as function
 import yaml
 import time
 import os
@@ -11,7 +12,8 @@ import os
 with open("settings.yaml", 'r') as file:
     case_data = yaml.safe_load(file)
 
-# perfect_gas = case_data["fluid"]["perfect_gas"] As an example
+fluid_name = case_data["fluid"]["fluid_name"]
+fluid = real_gas_prop.Fluid(fluid_name)
 
 p_in = int(float(case_data["boundary_conditions"]["p_stagnation"]))
 T_in = case_data["boundary_conditions"]["T_stagnation"]
@@ -28,15 +30,17 @@ D_in = 0.1
 A_ratio = 0.762
 length = 1
 
-properties = perfect_gas_props.perfect_gas_props("PT_INPUTS", p_in, T_in)
-rho_in = properties["d"]
-speed_sound_in = properties["a"]
-mu_in = properties["mu"]
-gamma_ratio = properties["gamma"]
-R = properties["R"]
+state_in = fluid.set_state(real_gas_prop.PT_INPUTS, p_in, T_in)
+
+# properties = perfect_gas_prop.perfect_gas_props("PT_INPUTS", p_in, T_in)
+# rho_in = properties["d"]
+# speed_sound_in = properties["a"]
+# mu_in = properties["mu"]
+# gamma_ratio = properties["gamma"]
+# R = properties["R"]
 
 start_time = time.time()
-solution, out, flow_rate, pif_iterations = functions.pipeline_steady_state_1D(p_in, T_in, D_in, properties, length, 1e-6, A_ratio, mass_flow=mass_flow_inlet, mach_in=M_in, critical_flow=critical_flow)
+solution, out, flow_rate, pif_iterations = function.pipeline_steady_state_1D(fluid_name, p_in, T_in, D_in, state_in, length, 1e-6, A_ratio, mass_flow=mass_flow_inlet, mach_in=M_in, critical_flow=critical_flow)
 
 # Calculate the duration
 end_time = time.time()
@@ -44,6 +48,8 @@ duration = end_time - start_time
 
 # Print simulation info
 os.system('cls')
+function.print_dict(case_data)
+print(" ")
 print("Mach at the inlet:                         ", f"{solution["mach_number"][0]:.4f}", "(-)")
 print("Mach at the throat:                        ", f"{solution["mach_number"][-1]:.4f}", "(-)")
 print("Critical lenght:                           ", f"{solution["distance"][-1]:.4f}", "(m)")
@@ -54,7 +60,7 @@ print("Computation time:                          ", f"{duration:.4f} seconds")
 
 
 # Plot evolution of flow variables
-functions.set_plot_options(grid=False)
+function.set_plot_options(grid=False)
 figure, ax = plt.subplots(figsize=(6.0, 4.8))
 ax.set_xlabel("Distance along pipe [m]")
 ax.set_ylabel("Normalized flow variables")
