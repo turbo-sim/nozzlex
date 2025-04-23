@@ -1,19 +1,18 @@
 boundary_conditions:
   p_stagnation:  101325
-  T_stagnation: 300
+  T_stagnation: 500
   critical_flow: True # If True the PIF will be performed
   mach_inlet: None
-  mass_flow_inlet: None
+  mass_flow_inlet: 52.106
 
-# Numerical settings
-numerical_settings:
-  Nx: 600 # Number of cells
- 
 nozzle_parameters:
-  type: planar # Planar or ciircular (still to be implemented)
-  r0: 3
-  rt: 0.5
-  roughness: 0.000002
+  type: Axisymmetric # Planar or Axisimmetric or Convergent
+  radius_in: 0.5
+  radius_throat: 0.3
+  radius_out: 0.4
+  convergent_length: 0.5
+  divergent_length: 0.5
+  roughness: 1e-6
  
 fluid:
   perfect_gas: false
