@@ -307,60 +307,40 @@ def postprocess_ode_autonomous(t, y, ode_handle):
     return ode_out
 
 
-def get_geometry(length, total_length, area_in, area_ratio):
-    """
-    Calculates the cross-sectional area, area slope, perimeter, and diameter
-    of a pipe or nozzle at a given length along its axis.
-
-    This function is useful for analyzing variable area pipes or nozzles, where the
-    area changes linearly from the inlet to the outlet. The area slope is calculated
-    based on the total change in area over the total length, assuming a linear variation.
-
-    Parameters
-    ----------
-    length : float
-        The position along the pipe or nozzle from the inlet (m).
-    total_length : float
-        The total length of the pipe or nozzle (m).
-    area_in : float
-        The cross-sectional area at the inlet of the pipe or nozzle (m^2).
-    area_ratio : float
-        The ratio of the area at the outlet to the area at the inlet.
-
-    Returns
-    -------
-    area : float
-        The cross-sectional area at the specified length (m^2).
-    area_slope : float
-        The rate of change of the area with respect to the pipe or nozzle's length (m^2/m).
-    perimeter : float
-        The perimeter of the cross-section at the specified length (m).
-    diameter : float
-        The diameter of the cross-section at the specified length (m).
-    """
-    area_slope = (area_ratio - 1.0) * area_in / total_length
-    area = area_in + area_slope * length
-    radius = np.sqrt(area / np.pi)
-    diameter = 2 * radius
-    perimeter = np.pi * diameter
-    return area, area_slope, perimeter, diameter
-
-def get_linear_convergent_divergent(length, convergent_length, divergent_length, radius_in, radius_throat, radius_out, type):
+def get_linear_convergent_divergent(length, convergent_length, divergent_length, radius_in, radius_throat, radius_out, width, type):
     
-    if type == "Axisymmetric":
-        area_in = np.pi*radius_in**2
-        area_throat = np.pi*radius_throat**2
-        area_out = np.pi*radius_out**2
+    # if type == "Axisymmetric":
+    #     area_in = np.pi*radius_in**2
+    #     area_throat = np.pi*radius_throat**2
+    #     area_out = np.pi*radius_out**2
         
+    #     if length <= convergent_length:
+    #         radius_slope = (radius_throat-radius_in)/convergent_length
+    #         radius = radius_in + radius_slope*length
+    #         area = np.pi*radius**2
+    #     elif length > convergent_length:
+    #         radius_slope = (radius_out-radius_in)/divergent_length
+    #         radius = radius_in + radius_slope*(length-convergent_length)
+    #         area = np.pi*radius**2
+
+    #     radius = np.sqrt(area/np.pi)
+    #     perimeter = np.pi*radius*2
+
+    if type == "Planar":
+        area_in = 2*radius_in*width
+        area_throat = 2*radius_throat*width
+        area_out = 2*radius_out*width
+
         if length <= convergent_length:
             area_slope = (area_throat-area_in)/convergent_length
-            area = area_in+area_slope*length
+            area = area_in + area_slope*length
+
         elif length > convergent_length:
             area_slope = (area_out-area_throat)/divergent_length
-            area = area_throat+area_slope*(length-convergent_length)
+            area = area_throat + area_slope*(length-convergent_length)
 
-        radius = np.sqrt(area/np.pi)
-        perimeter = np.pi*radius*2
+        radius = area/(2*width)
+        perimeter = 2*width+2*2*radius
 
     return area, area_slope, perimeter, radius
 
@@ -446,6 +426,7 @@ def pipeline_steady_state_1D(
     radius_throat,
     radius_out,
     nozzle_type,
+    width,
     mass_flow=None,
     mach_in=None,
     critical_flow = False,
@@ -468,7 +449,7 @@ def pipeline_steady_state_1D(
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
     if nozzle_type == "Planar":
-        area_in = 2*radius_in*1
+        area_in = 2*radius_in*width
     elif nozzle_type == "Axisymmetric":
         area_in = np.pi*radius_in**2
 
@@ -481,8 +462,8 @@ def pipeline_steady_state_1D(
     elif mach_in is not None:
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
-        mach_impossible = 0.7
-        mach_possible = 0.1
+        mach_impossible = 0.25
+        mach_possible = 0.000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
@@ -511,7 +492,7 @@ def pipeline_steady_state_1D(
             # Calculate area and geometry properties for convergent-divergent nozzles
             area, area_slope, perimeter, radius = get_linear_convergent_divergent(
                 length=x, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
-                radius_out=radius_out, type=nozzle_type)
+                radius_out=radius_out, width=width, type=nozzle_type)
             diameter = radius*2
 
             # Wall friction calculations
@@ -550,8 +531,8 @@ def pipeline_steady_state_1D(
                 flag = 1
 
             # Right-hand side of the system
-            G = state.isobaric_expansion_coefficient * state.a**2 / state.cp
-
+            # G = state.isobaric_expansion_coefficient * state.a**2 / state.cp
+            G = 0
             b = np.asarray(
                 [
                     -rho * v / area * area_slope,
@@ -605,9 +586,8 @@ def pipeline_steady_state_1D(
         pif_iterations = 0
         print("Possible-Impossible Flow (PIF) algorithm starts...")
         error = abs(m_impossible-m_possible)/m_possible
-        tol = 0.25e-1
+        tol = 1e-2
         while error > tol:
-
             pif_iterations += 1  
             solution = scipy.integrate.solve_ivp(
                 lambda t, y: odefun(t, y)[0],
@@ -669,18 +649,26 @@ def pipeline_steady_state_1D(
             atol=1e-9,
         ) 
         solution = postprocess_ode(solution.t, solution.y, odefun) 
-        n=20
-        step_axis = solution["distance"][-1]-solution["distance"][-20]
-        velocity_grad = abs(solution["velocity"][-1]-solution["velocity"][-20])/step_axis
-        density_grad = abs(solution["density"][-1]-solution["density"][-20])/step_axis
-        pressure_grad = abs(solution["pressure"][-1]-solution["pressure"][-20])/step_axis
+        mass_flow = solution["mass_flow"][0]
+        density = solution["density"][-1]
+        x = convergent_length*1.00001
+        area, area_slope, perimeter, radius = get_linear_convergent_divergent(x, 
+                                                                              convergent_length=convergent_length,
+                                                                              divergent_length=divergent_length,
+                                                                              radius_in=radius_in,
+                                                                              radius_out=radius_out,
+                                                                              radius_throat=radius_throat,
+                                                                              width=width,
+                                                                              type=nozzle_type)
+        velocity = mass_flow/(density*area)
+
         # Calculate the supersonic branch
         supersonic_solution = scipy.integrate.solve_ivp(
             lambda t, y: odefun(t, y)[0],
-            [convergent_length+step_axis, (total_length)],
-            [solution["velocity"][-1]+step_axis*velocity_grad*n, 
-             solution["density"][-1]-step_axis*density_grad*n, 
-             solution["pressure"][-1]-step_axis*pressure_grad*n],
+            [x, (total_length)],
+            [velocity, 
+             solution["density"][-1], 
+             solution["pressure"][-1]],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="RK45",
             rtol=1e-9,
@@ -722,6 +710,7 @@ def pipeline_steady_state_1D_autonomous(
     radius_throat,
     radius_out,
     nozzle_type,
+    width,
     mass_flow=None,
     mach_in=None,
     critical_flow = False,
@@ -744,7 +733,7 @@ def pipeline_steady_state_1D_autonomous(
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
     if nozzle_type == "Planar":
-        area_in = 2*radius_in*1
+        area_in = 2*radius_in*width
     elif nozzle_type == "Axisymmetric":
         area_in = np.pi*radius_in**2
 
@@ -757,8 +746,8 @@ def pipeline_steady_state_1D_autonomous(
     elif mach_in is not None:
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
-        mach_impossible = 0.7
-        mach_possible = 0.1
+        mach_impossible = 0.25
+        mach_possible = 0.000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
@@ -780,7 +769,7 @@ def pipeline_steady_state_1D_autonomous(
             # Calculate area and geometry properties for convergent-divergent nozzles
             area, area_slope, perimeter, radius = get_linear_convergent_divergent(
                 length=x, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
-                radius_out=radius_out, type=nozzle_type)
+                radius_out=radius_out, width=width, type=nozzle_type)
             diameter = radius*2
 
             # Wall friction calculations
@@ -812,7 +801,8 @@ def pipeline_steady_state_1D_autonomous(
             )
 
             # Right-hand side of the system
-            G = state.isobaric_expansion_coefficient * state.a**2 / state.cp
+            # G = state.isobaric_expansion_coefficient * state.a**2 / state.cp
+            G = 0
             b = np.asarray(
                 [
                     -rho * v / area * area_slope,
@@ -872,108 +862,7 @@ def pipeline_steady_state_1D_autonomous(
             return dy, out, flag
         
         except Exception as e:
-            print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
-            return [np.nan, np.nan, np.nan, np.nan]  # forces integrator to stop
-
-    # Define the ODE system
-    def odefun_2_input(t, y):
-        x = t  # distance
-        v, rho, p = y  # velocity, density, pressure
-        
-        try:
-
-            # Thermodynamic state from perfect gas properties
-            state = fluid.set_state(DmassP_INPUTS, rho, p)
-
-            # Calculate area and geometry properties for convergent-divergent nozzles
-            area, area_slope, perimeter, radius = get_linear_convergent_divergent(
-                length=x, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
-                radius_out=radius_out, type=nozzle_type)
-            diameter = radius*2
-
-            # Wall friction calculations
-            stress_wall, friction_factor, reynolds = get_wall_friction(
-                velocity=v,
-                density=rho,
-                viscosity=state["mu"],
-                roughness=roughness,
-                diameter=diameter,
-            )
-            if not include_friction:
-                stress_wall = 0.0
-                friction_factor = 0.0
-
-            # Heat transfer (if applicable)
-            if include_heat_transfer:
-                U = 10 # To include correlations 
-            else:
-                U = 0.0
-                heat_in = 0
-
-            # Coefficient matrix M for ODE system
-            M = np.asarray(
-                [
-                    [rho, v, 0.0],
-                    [rho * v, 0.0, 1.0],
-                    [0.0, -state["a"]**2, 1.0],
-                ]
-            )
-
-            determinant = det(M)
-
-            # If singularity detected
-            flag = 0
-            if abs(determinant) < 2:
-                flag = 1
-
-            # Right-hand side of the system
-            G = state.isobaric_expansion_coefficient * state.a**2 / state.cp
-
-            b = np.asarray(
-                [
-                    -rho * v / area * area_slope,
-                    -perimeter / area * stress_wall,
-                    perimeter / area * G / v * (stress_wall * v + heat_in),
-                ]
-            )
-
-            # Solve the system to get the change in state
-            dy = scipy.linalg.solve(M, b)
-
-            # Save the output at each step in the dictionary
-            out = {
-                "distance": x,
-                "velocity": v,
-                "density": rho,
-                "pressure": p,
-                "temperature": state["T"],
-                "speed_of_sound": state["a"],
-                "viscosity": state["mu"],
-                "enthalpy": state["h"],
-                "entropy": state["s"],
-                "total_enthalpy": state["h"] + 0.5 * v**2,
-                "mach_number": v / state["a"],
-                "mass_flow": v * rho * area,
-                "area": area,
-                "area_slope": area_slope,
-                "perimeter": perimeter,
-                "diameter": diameter,
-                "stress_wall": stress_wall,
-                "friction_factor": friction_factor,
-                "reynolds": reynolds,
-                "source_1": b[0],
-                "source_2": b[1],
-                "source_3": b[2],
-                "determinant": determinant,
-            }
-
-            # Append the output dictionary to out_list
-            out_list.append(out)
-
-            return dy, out, flag
-        
-        except Exception as e:
-            print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
             return [np.nan, np.nan, np.nan, np.nan]  # forces integrator to stop
 
     # This function avoid to keep solving for the Impossible Flow when the matrix
@@ -1013,7 +902,7 @@ def pipeline_steady_state_1D_autonomous(
         pif_iterations = 0
         print("Possible-Impossible Flow (PIF) algorithm starts...")
         error = abs(m_impossible-m_possible)/m_possible
-        tol = 0.25e-1
+        tol = 1e-2
         while error > tol:
             pif_iterations += 1  
             solution = scipy.integrate.solve_ivp(
@@ -1082,18 +971,26 @@ def pipeline_steady_state_1D_autonomous(
         ) 
         solution = postprocess_ode_autonomous(solution.t, solution.y, odefun) 
 
-        n=20
-        step_axis = solution["distance"][-1]-solution["distance"][-20]
-        velocity_grad = abs(solution["velocity"][-1]-solution["velocity"][-20])/step_axis
-        density_grad = abs(solution["density"][-1]-solution["density"][-20])/step_axis
-        pressure_grad = abs(solution["pressure"][-1]-solution["pressure"][-20])/step_axis
-        
+        mass_flow = solution["mass_flow"][0]
+        density = solution["density"][-1]
+        x = convergent_length*1.00001
+        area, area_slope, perimeter, radius = get_linear_convergent_divergent(x, 
+                                                                              convergent_length=convergent_length,
+                                                                              divergent_length=divergent_length,
+                                                                              radius_in=radius_in,
+                                                                              radius_out=radius_out,
+                                                                              radius_throat=radius_throat,
+                                                                              width=width,
+                                                                              type=nozzle_type)
+        velocity = mass_flow/(density*area)
+
         supersonic_solution = scipy.integrate.solve_ivp(
             lambda t, y: odefun(y)[0],
             [1, 0], # Inverting dummy variable limits so you so not go backward at the singularity (all the determinants<0)
-            [0.5001, solution["velocity"][-1]*1.001, 
-             solution["density"][-1]*0.999, 
-             solution["pressure"][-1]*0.999],
+            [x,
+             velocity, 
+             solution["density"][-1], 
+             solution["pressure"][-1]],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="RK45",
             rtol=1e-9,
@@ -1101,7 +998,7 @@ def pipeline_steady_state_1D_autonomous(
             events=stop_at_length
         ) 
         supersonic_solution = postprocess_ode_autonomous(supersonic_solution.t, supersonic_solution.y, odefun) 
-        
+
     # To fix:
     else:
         pif_iterations = None

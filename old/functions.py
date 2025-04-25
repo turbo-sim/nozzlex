@@ -608,7 +608,7 @@ def postprocess_ode(t, y, ode_handle):
 
     return ode_out
 
-
+# Andrea: I think this is not correct as the area does not vary linearly for a circular cross-section
 def get_geometry(length, total_length, area_in, area_ratio):
     """
     Calculates the cross-sectional area, area slope, perimeter, and diameter

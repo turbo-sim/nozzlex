@@ -6,9 +6,14 @@ import functions as function
 import yaml
 import time
 import os
+import shutil
+import barotropy as bpy # Only used to plot the Ts and Ph diagrams, not for evaluating properties during computation
 
 
-# Read YAML file
+# ====================================================
+# === 1. IMPORT SETTINGS                           ===
+# ====================================================
+
 with open("settings.yaml", 'r') as file:
     case_data = yaml.safe_load(file)
 
@@ -18,25 +23,31 @@ fluid = real_gas_prop.Fluid(fluid_name)
 
 # Upload nozzle parameters from yaml file
 nozzle_type = case_data["nozzle_parameters"]["type"]
-convergent_length = case_data["nozzle_parameters"]["convergent_length"]
-divergent_length = case_data["nozzle_parameters"]["divergent_length"]
-radius_in = case_data["nozzle_parameters"]["radius_in"]
-radius_throat = case_data["nozzle_parameters"]["radius_throat"]
-radius_out = case_data["nozzle_parameters"]["radius_out"]
+convergent_length = float(case_data["nozzle_parameters"]["convergent_length"])
+divergent_length = float(case_data["nozzle_parameters"]["divergent_length"])
+radius_in = float(case_data["nozzle_parameters"]["radius_in"])
+radius_throat = float(case_data["nozzle_parameters"]["radius_throat"])
+radius_out = float(case_data["nozzle_parameters"]["radius_out"])
 roughness = float(case_data["nozzle_parameters"]["roughness"])
+if nozzle_type == "Planar":
+    width = float(case_data["nozzle_parameters"]["width"])
 
 # Upload nozzle parameters from yaml file
 p_in = int(float(case_data["boundary_conditions"]["p_stagnation"]))
 T_in = case_data["boundary_conditions"]["T_stagnation"]
 critical_flow = case_data["boundary_conditions"]["critical_flow"]
 
+# ====================================================
+# === 2. PERFORM SIMULATION                        ===
+# ====================================================
+
 state_in = fluid.set_state(real_gas_prop.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
-supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous(
+supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D(
     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
-    nozzle_type=nozzle_type, critical_flow=critical_flow, include_friction=True, include_heat_transfer=False)
+    nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=False, include_heat_transfer=False)
 
 # solution, solution_supersonic = function.pipeline_steady_state_1D_critical(
 #     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
@@ -47,7 +58,11 @@ supersonic_solution, possible_solution, impossible_solution, solution, flow_rate
 end_time = time.time()
 duration = end_time - start_time
 
-# Print simulation info
+
+# ====================================================
+# === 3. PRINT RESULTS                             ===
+# ====================================================
+
 # os.system('cls')
 function.print_dict(case_data)
 print(" ")
@@ -58,11 +73,57 @@ print("Flow rate:                                 ", f"{flow_rate:.7f}", "(kg/s)
 print("PIF number of iterations:                  ", pif_iterations)
 print("Computation time:                          ", f"{duration:.4f} seconds")
 
-# Plot evolution of flow variables
+
+# ====================================================
+# === 4. SAVE PLOT THERMODYNAMIC PROPERTIES        ===
+# ====================================================
+# Initialize x_values
+x_values = np.linspace(0, convergent_length + divergent_length, num=50)
+
+# Initialize empty lists to store results
+areas = []
+area_slopes = []
+perimeters = []
+radii = []
+
+# Prepare the plot
+figure, ax1 = plt.subplots(figsize=(6.0, 4.8))
+
+# Loop through each x position
+for x_i in x_values:
+    area, area_slope, perimeter, radius = function.get_linear_convergent_divergent(
+        x_i,
+        convergent_length=convergent_length,
+        divergent_length=divergent_length,
+        radius_in=radius_in,
+        radius_out=radius_out,
+        radius_throat=radius_throat,
+        width=width,
+        type=nozzle_type,
+    )
+    
+    # Store the values
+    areas.append(area)
+    area_slopes.append(area_slope)
+    perimeters.append(perimeter)
+    radii.append(radius)
+
+# Now plot after collecting all the values
+ax1.plot(x_values, radii)
+# ax1.plot([0,27.35], [5, 0.12])
+# Labeling and showing the plot
+ax1.set_xlabel("Position [m]", fontsize=14)
+ax1.set_ylabel("Area Slope", fontsize=14)
+ax1.grid(True)
+
+##################
 colors = function.COLORS_MATLAB
 
 function.set_plot_options(grid=False)
-figure, ax1 = plt.subplots(figsize=(6.0, 4.8))
+fig, axs = plt.subplots(2, 2, figsize=(12, 9))
+# figure, ax1 = plt.subplots(figsize=(6.0, 4.8))
+# First subplot - Normalized pressure
+ax1 = axs[0, 0]
 ax1.set_xlabel("Axis position [-]", fontsize=14)
 ax1.set_ylabel("Normalized static pressure [-]", fontsize=14)
 ax1.plot(
@@ -106,9 +167,11 @@ ax1.plot(
     label="Supersonic branch",
 )
 ax1.legend(loc="best")
-figure.tight_layout(pad=1)
+# figure.tight_layout(pad=1)
 
-figure, ax2 = plt.subplots(figsize=(6.0, 4.8))
+# figure, ax2 = plt.subplots(figsize=(6.0, 4.8))
+# Second subplot - Velocity
+ax2 = axs[0, 1]
 ax2.set_xlabel("Axis position [-]", fontsize=14)
 ax2.set_ylabel("Velocity [m/s]", fontsize=14)
 ax2.plot(
@@ -152,9 +215,11 @@ ax2.plot(
     label="Supersonic branch",
 )
 ax2.legend(loc="best")
-figure.tight_layout(pad=1)
+# figure.tight_layout(pad=1)
 
-figure, ax3 = plt.subplots(figsize=(6.0, 4.8))
+# figure, ax3 = plt.subplots(figsize=(6.0, 4.8))
+# Second subplot - Mach
+ax3 = axs[1, 0]
 ax3.set_xlabel("Axis position [-]", fontsize=14)
 ax3.set_ylabel("Mach number [-]", fontsize=14)
 ax3.plot(
@@ -198,39 +263,175 @@ ax3.plot(
     label="Supersonic branch",
 )
 ax3.legend(loc="best")
-figure.tight_layout(pad=1)
+# figure.tight_layout(pad=1)
 
-# Plot numerical integration error
+# figure, ax4 = plt.subplots(figsize=(6.0, 4.8))
+# Second subplot - Density
+ax4 = axs[1, 1]
+ax4.set_xlabel("Axis position [-]", fontsize=14)
+ax4.set_ylabel("Normalized density [-]", fontsize=14)
+ax4.plot(
+    solution["distance"],
+    solution["density"]/solution["density"][0],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Critical flow",
+)
+ax4.plot(
+    impossible_solution["distance"],
+    impossible_solution["density"]/solution["density"][0],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Impossible flow",
+)
+ax4.plot(
+    possible_solution["distance"],
+    possible_solution["density"]/solution["density"][0],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Possible flow",
+)
+ax4.plot(
+    supersonic_solution["distance"],
+    supersonic_solution["density"]/solution["density"][0],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Supersonic branch",
+)
+ax4.legend(loc="best")
+
+# figure.tight_layout(pad=1)
+fig.tight_layout(pad=2)
+# plt.show()
+plt.savefig(os.path.join("results", "properties.png"))
+
+# ====================================================
+# === 5. SAVE PLOT T-s AND P-h DIAGRAMS            ===
+# ====================================================
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.0), gridspec_kw={"wspace": 0.25})
+ax1.set_xlabel("Entropy (J/kg/K)")
+ax1.set_ylabel("Temperature (K)")
+ax2.set_xlabel("Enthalpy (J/kg)")
+ax2.set_ylabel("Pressure (Pa)")
+
+prop_x1, prop_y1 = "s","T"
+prop_x2, prop_y2 = "h", "p"
+
+fluid = bpy.Fluid(name=fluid_name, backend="HEOS")
+fluid.plot_phase_diagram(
+    prop_x1,
+    prop_y1,
+    axes=ax1,
+    plot_critical_point=True,
+    plot_quality_isolines=True,
+    plot_pseudocritical_line=False,
+    plot_spinodal_line=False,
+)
+
+ax1.plot(solution["entropy"], 
+        solution["temperature"],
+        linewidth=1.00,
+        marker="o",
+        markersize=3.5,
+        markeredgewidth=1.00,
+        markerfacecolor="w",
+        label="Convergent",
+        )
+
+ax1.plot(supersonic_solution["entropy"], 
+        supersonic_solution["temperature"],
+        linewidth=1.00,
+        marker="o",
+        markersize=3.5,
+        markeredgewidth=1.00,
+        markerfacecolor="w",
+        label="Divergent",
+        )
+ax1.legend(loc="best")
+
+fluid.plot_phase_diagram(
+    prop_x2,
+    prop_y2,
+    axes=ax2,
+    plot_critical_point=True,
+    plot_quality_isolines=True,
+    plot_pseudocritical_line=False,
+    plot_spinodal_line=False,
+)
+
+ax2.plot(solution["enthalpy"], 
+        solution["pressure"],
+        linewidth=1.00,
+        marker="o",
+        markersize=3.5,
+        markeredgewidth=1.00,
+        markerfacecolor="w",
+        label="Convergent",
+        )
+
+ax2.plot(supersonic_solution["enthalpy"], 
+        supersonic_solution["pressure"],
+        linewidth=1.00,
+        marker="o",
+        markersize=3.5,
+        markeredgewidth=1.00,
+        markerfacecolor="w",
+        label="Divergent",
+        )
+ax2.legend(loc="best")
+
+fig.tight_layout(pad=2)
+
+plt.savefig(os.path.join("results", "diagrams.png"))
+
+# ====================================================
+# === 6. SAVE PLOT NUMERICAL INTEGRATION ERROR     ===
+# ====================================================
+
 # The mass should always be conserved
 # The total enthalpy is conserved if the heat transfer is zero
 # The entropy is conserved if both heat transfer and friction are zero
+
+figure, ax = plt.subplots(figsize=(6.0, 4.8))
 m_error_sub = solution["mass_flow"] / solution["mass_flow"][0] - 1
 h_error_sub = solution["total_enthalpy"] / solution["total_enthalpy"][0] - 1
 s_error_sub = solution["entropy"] / solution["entropy"][0] - 1
-figure, ax = plt.subplots(figsize=(6.0, 4.8))
 ax.set_xlabel("Axis distance (m)")
 ax.set_ylabel("Integration error")
 ax.set_yscale("log")
 ax.plot(solution["distance"], np.abs(m_error_sub), label="Mass flow error")
 ax.plot(solution["distance"], np.abs(h_error_sub), label="Total enthalpy error")
 # ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
+m_error_sup = supersonic_solution["mass_flow"] / solution["mass_flow"][0] - 1
+h_error_sup = supersonic_solution["total_enthalpy"] / solution["total_enthalpy"][0] - 1
+s_error_sup = supersonic_solution["entropy"] / solution["entropy"][0] - 1
+ax.plot(supersonic_solution["distance"], np.abs(m_error_sup), label="Mass flow error")
+ax.plot(supersonic_solution["distance"], np.abs(h_error_sup), label="Total enthalpy error")
+# ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
+ax.legend(loc="best")
+fig.tight_layout(pad=2)
 
-# m_error_sup = solution_supersonic["mass_flow"] / solution_supersonic["mass_flow"][0] - 1
-# h_error_sup = solution_supersonic["total_enthalpy"] / solution_supersonic["total_enthalpy"][0] - 1
-# s_error_sup = solution_supersonic["entropy"] / solution_supersonic["entropy"][0] - 1
-# ax.plot(solution_supersonic["distance"], np.abs(m_error_sup), label="Mass flow error")
-# ax.plot(solution_supersonic["distance"], np.abs(h_error_sup), label="Total enthalpy error")
-# # ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
-# ax.legend(loc="best", fontsize=9)
-# figure.tight_layout(pad=1)
+plt.savefig(os.path.join("results", "error.png"))
 
-# Plot the determinant of the matrix
-# plt.figure()
-# x = np.linspace(0, length, len(solution["determinant"]))
-# plt.ylabel("Jacobian determinant")
-# plt.xlabel("Axis position (m)")
-# plt.plot(x, solution["determinant"])
-# plt.tight_layout()
+# Copy yaml file in the result folder
+shutil.copyfile("settings.yaml", 
+                os.path.join("results", "settings.yaml"))
+
+print(solution["mass_flow"][0])
+print(supersonic_solution["mass_flow"][-1])
 
 
 plt.show()
