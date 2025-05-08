@@ -281,14 +281,9 @@ def postprocess_ode_autonomous(t, y, ode_handle):
     """
     # Initialize ode_out as a dictionary
     ode_out = {}
-    singularity_detected = False
 
     for t_i, y_i in zip(t, y.T):
-        _, out, flag = ode_handle(y_i)
-
-        if flag == 1:
-            singularity_detected = True
-        
+        _, out = ode_handle(y_i)
 
         for key, value in out.items():
             # Initialize with an empty list
@@ -300,9 +295,6 @@ def postprocess_ode_autonomous(t, y, ode_handle):
     # Convert lists to numpy arrays
     for key in ode_out:
         ode_out[key] = np.array(ode_out[key])
-
-    # Add singularity info
-    ode_out["singularity_detected"] = singularity_detected
 
     return ode_out
 
@@ -747,7 +739,7 @@ def pipeline_steady_state_1D_autonomous(
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
         mach_impossible = 0.25
-        mach_possible = 0.000001
+        mach_possible = 0.00000000000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
@@ -823,13 +815,13 @@ def pipeline_steady_state_1D_autonomous(
             det_M1 = det(M1)
             det_M2 = det(M2)
             det_M3 = det(M3)
+            # print("det 1", det_M)
+            # print("det 2", det_M1)
+            # print("det 3", det_M2)
+            # print("det 4", det_M3)
+            # print(" ")
         
             dy = [det_M, det_M1, det_M2, det_M3]
-
-            # If singularity detected
-            flag = 0
-            if abs(det_M) < 2:
-                flag = 1
 
             # Save the output at each step in the dictionary
             out = {
@@ -854,12 +846,13 @@ def pipeline_steady_state_1D_autonomous(
                 "reynolds": reynolds,
                 "source_1": b[0],
                 "source_2": b[1],
+                "determinant": det_M,
             }
 
             # Append the output dictionary to out_list
             out_list.append(out)
 
-            return dy, out, flag
+            return dy, out
         
         except Exception as e:
             # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
@@ -868,22 +861,8 @@ def pipeline_steady_state_1D_autonomous(
     # This function avoid to keep solving for the Impossible Flow when the matrix
     # is singular (backward flow)    
     def stop_at_zero_det(t, y):
-        x, v, rho, p = y
-
-        # Calculate thermodynamic state
-        state = fluid.set_state(DmassP_INPUTS, rho, p)
-
-        # Compute M (matrix from your system of equations)
-        M = np.asarray(
-            [
-                [rho, v, 0.0],
-                [rho * v, 0.0, 1.0],
-                [0.0, -state.a**2, 1.0],
-            ]
-        )
-
-        # Compute the determinant of M
-        det_M = np.linalg.det(M)
+        _, out = odefun(y)
+        det_M = out["determinant"]
         return det_M
 
     stop_at_zero_det.terminal = True  # Stop when det(M) = 0
@@ -897,6 +876,13 @@ def pipeline_steady_state_1D_autonomous(
     stop_at_length.terminal = True     
     stop_at_length.direction = 1  
 
+    def stop_at_zero(t, y):
+        x = y[0]  # assuming y[0] is the nozzle length variable (x)
+        return x  
+
+    stop_at_zero.terminal = True
+    stop_at_zero.direction = -1 
+
     # Possible-impossible flow (PIF) algorithm to find critical flow rate
     if critical_flow is True: 
         pif_iterations = 0
@@ -905,19 +891,19 @@ def pipeline_steady_state_1D_autonomous(
         tol = 1e-2
         while error > tol:
             pif_iterations += 1  
-            solution = scipy.integrate.solve_ivp(
+            raw_solution = scipy.integrate.solve_ivp(
                 lambda t, y: odefun(y)[0],
                 [0, 1],
                 [0, u_guess, density_in, pressure_in],
                 t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
-                method="RK45",
+                method="Radau",
                 rtol=1e-9,
                 atol=1e-9,
                 events=[stop_at_length, stop_at_zero_det]
             )
-            solution = postprocess_ode_autonomous(solution.t, solution.y, odefun)
+            solution = postprocess_ode_autonomous(raw_solution.t, raw_solution.y, odefun)
             
-            if solution["singularity_detected"] == True:
+            if raw_solution.t_events[1].size > 0:
                 m_impossible = m_guess
             else:
                 m_possible = m_guess
@@ -925,6 +911,8 @@ def pipeline_steady_state_1D_autonomous(
             m_guess = (m_impossible+m_possible) / 2
             u_guess = m_guess / (density_in * area_in)  
             error = abs(m_impossible-m_possible)/m_possible
+            print(m_impossible)
+            print(m_possible)
 
         flow_rate = u_guess*area_in*density_in
 
@@ -936,7 +924,7 @@ def pipeline_steady_state_1D_autonomous(
             [0, 1],
             [0, u_possible, density_in, pressure_in],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
-            method="RK45",
+            method="Radau",
             rtol=1e-9,
             atol=1e-9,
             events=[stop_at_length, stop_at_zero_det]
@@ -950,7 +938,7 @@ def pipeline_steady_state_1D_autonomous(
             [0, 1],
             [0, u_impossible, density_in, pressure_in],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
-            method="RK45",
+            method="Radau",
             rtol=1e-9,
             atol=1e-9,
             events=[stop_at_length, stop_at_zero_det]
@@ -964,7 +952,7 @@ def pipeline_steady_state_1D_autonomous(
             [0, 1],
             [0, u_avg, density_in, pressure_in],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
-            method="RK45",
+            method="Radau",
             rtol=1e-9,
             atol=1e-9,
             events=[stop_at_length, stop_at_zero_det]
@@ -988,14 +976,14 @@ def pipeline_steady_state_1D_autonomous(
             lambda t, y: odefun(y)[0],
             [1, 0], # Inverting dummy variable limits so you so not go backward at the singularity (all the determinants<0)
             [x,
-             velocity, 
-             solution["density"][-1], 
-             solution["pressure"][-1]],
+             velocity*1.01, 
+             solution["density"][-1]*0.99, 
+             solution["pressure"][-1]*0.99],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="RK45",
             rtol=1e-9,
             atol=1e-9,
-            events=stop_at_length
+            events=[stop_at_length, stop_at_zero]
         ) 
         supersonic_solution = postprocess_ode_autonomous(supersonic_solution.t, supersonic_solution.y, odefun) 
 
@@ -1007,7 +995,7 @@ def pipeline_steady_state_1D_autonomous(
         [0.0, total_length],
         [velocity_in, density_in, pressure_in],
         t_eval=np.linspace(0, total_length, number_of_points) if number_of_points else None,
-        method="RK45",
+        method="Radau",
         rtol=1e-9,
         atol=1e-9,
         )
