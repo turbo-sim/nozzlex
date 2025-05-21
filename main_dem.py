@@ -44,7 +44,7 @@ critical_flow = case_data["boundary_conditions"]["critical_flow"]
 state_in = fluid.get_state(bpy.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
-supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous(
+possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous(
     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
     nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=False, include_heat_transfer=False)
@@ -57,6 +57,9 @@ supersonic_solution, possible_solution, impossible_solution, solution, flow_rate
 # Calculate the duration
 end_time = time.time()
 duration = end_time - start_time
+
+to_save = ["distance", "velocity", "density", "pressure", "speed_of_sound", "mass_flow", "entropy", "mach_number", "quality", "stable_fraction"]
+function.save_selected_to_csv(solution, to_save, filename="nakagawa_p61_T293_IDEM2.csv")
 
 
 # ====================================================
@@ -156,16 +159,16 @@ ax1.plot(
 #     markerfacecolor="w",
 #     label="Possible branch HEM",
 # )
-ax1.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["pressure"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch DEM",
-)
+# ax1.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["pressure"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch DEM",
+# )
 ax1.legend(loc="best")
 # figure.tight_layout(pad=1)
 
@@ -204,16 +207,16 @@ ax2.plot(
 #     markerfacecolor="w",
 #     label="Possible branch HEM",
 # )
-ax2.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["velocity"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch DEM",
-)
+# ax2.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["velocity"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch DEM",
+# )
 ax2.legend(loc="best")
 figure.tight_layout(pad=1)
 
@@ -224,7 +227,7 @@ ax3.set_xlabel("Axis position [-]", fontsize=14)
 ax3.set_ylabel("Mach number [-]", fontsize=14)
 ax3.plot(
     solution["distance"],
-    solution["mach_number"],
+    solution["stable_fraction"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -252,27 +255,27 @@ ax3.plot(
 #     markerfacecolor="w",
 #     label="Possible flow",
 # )
-ax3.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["mach_number"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch",
-)
+# ax3.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["stable_fraction"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch",
+# )
 ax3.legend(loc="best")
 figure.tight_layout(pad=1)
 
-# figure, ax4 = plt.subplots(figsize=(6.0, 4.8))
+figure, ax4 = plt.subplots(figsize=(6.0, 4.8))
 # Second subplot - Density
 ax4 = axs[1, 1]
 ax4.set_xlabel("Axis position [-]", fontsize=14)
 ax4.set_ylabel("Normalized density [-]", fontsize=14)
 ax4.plot(
     solution["distance"],
-    solution["density"],
+    solution["determinant"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -300,17 +303,19 @@ ax4.plot(
 #     markerfacecolor="w",
 #     label="Possible flow",
 # )
-ax4.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["density"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch",
-)
-ax4.legend(loc="best")
+# ax4.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["determinant"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch",
+# )
+# ax4.set_ylim(-3, 6)
+# ax4.set_xlim(0.015, 0.035)
+# ax4.legend(loc="best")
 
 figure.tight_layout(pad=1)
 fig.tight_layout(pad=2)

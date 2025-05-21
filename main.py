@@ -128,7 +128,7 @@ ax1.set_xlabel("Axis position [-]", fontsize=14)
 ax1.set_ylabel("Normalized static pressure [-]", fontsize=14)
 ax1.plot(
     impossible_solution["distance"],
-    impossible_solution["pressure"]/solution["pressure"][0],
+    impossible_solution["pressure"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -138,7 +138,7 @@ ax1.plot(
 )
 ax1.plot(
     solution["distance"],
-    solution["pressure"]/solution["pressure"][0],
+    solution["pressure"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -148,7 +148,7 @@ ax1.plot(
 )
 ax1.plot(
     possible_solution["distance"],
-    possible_solution["pressure"]/solution["pressure"][0],
+    possible_solution["pressure"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -158,7 +158,7 @@ ax1.plot(
 )
 ax1.plot(
     supersonic_solution["distance"],
-    supersonic_solution["pressure"]/solution["pressure"][0],
+    supersonic_solution["pressure"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -272,7 +272,7 @@ ax4.set_xlabel("Axis position [-]", fontsize=14)
 ax4.set_ylabel("Normalized density [-]", fontsize=14)
 ax4.plot(
     solution["distance"],
-    solution["density"]/solution["density"][0],
+    solution["determinant_D"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -282,7 +282,7 @@ ax4.plot(
 )
 ax4.plot(
     impossible_solution["distance"],
-    impossible_solution["density"]/solution["density"][0],
+    impossible_solution["determinant_D"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -292,7 +292,7 @@ ax4.plot(
 )
 ax4.plot(
     possible_solution["distance"],
-    possible_solution["density"]/solution["density"][0],
+    possible_solution["determinant_D"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -302,7 +302,7 @@ ax4.plot(
 )
 ax4.plot(
     supersonic_solution["distance"],
-    supersonic_solution["density"]/solution["density"][0],
+    supersonic_solution["determinant_D"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,

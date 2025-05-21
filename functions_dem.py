@@ -11,6 +11,9 @@ import warnings
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
 import barotropy as bpy
+import pandas as pd
+import os
+
 
 
 COLORS_PYTHON = [
@@ -221,6 +224,36 @@ PHASE_INDEX = {attr: getattr(CP, attr) for attr in dir(CP) if attr.startswith("i
 INPUT_PAIRS = {attr: getattr(CP, attr) for attr in dir(CP) if attr.endswith("_INPUTS")}
 INPUT_PAIRS = sorted(INPUT_PAIRS.items(), key=lambda x: x[1])
 
+def save_selected_to_csv(out_dict, keys_to_save, filename):
+    """
+    Save selected entries from a simulation output dictionary to output/filename.
+
+    Parameters:
+    - out_dict: dict containing simulation data
+    - keys_to_save: list of keys to include in the CSV
+    - filename: name of the CSV file only (e.g., "run1.csv")
+    """
+    # Ensure 'output/' directory exists
+    output_dir = "output"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Full path to the output file
+    full_path = os.path.join(output_dir, filename)
+
+    # Expand scalars to match the length of the first non-scalar entry
+    first_key = next(key for key in keys_to_save if not isinstance(out_dict[key], (int, float)))
+    length = len(out_dict[first_key])
+
+    filtered = {}
+    for key in keys_to_save:
+        val = out_dict[key]
+        filtered[key] = [val] * length if isinstance(val, (int, float)) else val
+
+    # Save to CSV
+    df = pd.DataFrame(filtered)
+    df.to_csv(full_path, index=False)
+
+
 def postprocess_ode(t, y, ode_handle):
     """
     Post-processes the output of an ordinary differential equation (ODE) solver.
@@ -393,8 +426,8 @@ def get_friction_factor_haaland(reynolds, roughness, diameter):
 # and integrate in space to find the adapted supersonic solution. The PIF algorithm is the simplest among the ones available in the 
 # iterature and the ODE is a conventional ODE system and not an autonomous system of equations.
 
+def dem_term_angielczyk_1(perimeter, p, y, p_sat_T_LM, p_cr, area):
 
-def dem_term(perimeter, p, y, p_sat_T_LM, p_cr, area, dAdz_div, dAdz_conv):
     ## Accoding to Angielczyk
     C_1 = 5.17
     C_2 = 0.87
@@ -408,15 +441,19 @@ def dem_term(perimeter, p, y, p_sat_T_LM, p_cr, area, dAdz_div, dAdz_conv):
 
     f = (C_1 * perimeter / area + C_2) * (1 - y) * base ** C_3
 
+    return f
+
+def dem_term_angielczyk_2(p, y, p_sat_T_LM, p_cr, dAdz_div, dAdz_conv):
+
     ## Correlation used by Angielczyk
-    # C_1 = 38
-    # C_2 = 1.291*10**(-31)
-    # C_3 = 75.28
-    # C_4 = -0.22
+    C_1 = 38
+    C_2 = 1.291e-31
+    C_3 = 75.28
+    C_4 = -0.22
 
-    # dAdz_ref = 0.0801424*10**(-4)
+    dAdz_ref = 0.0801424e-4
 
-    # f = (C_1 + C_2*np.exp(C_3*(dAdz_div - dAdz_conv)/(dAdz_ref - dAdz_conv)))*(1-y)*((p_sat_T_LM - p) / (p_cr - p_sat_T_LM))**C_4 
+    f = (C_1 + C_2*np.exp(C_3*(dAdz_div - dAdz_conv)/(dAdz_ref - dAdz_conv)))*(1-y)*((p_sat_T_LM - p) / (p_cr - p_sat_T_LM))**C_4 
     
     return f
 
@@ -703,7 +740,7 @@ def pipeline_steady_state_1D(
                     spec_vol_mix / area * area_slope,
                     -perimeter / area * stress_wall,
                     0.0, # To modify in case of heat transfer to be included
-                    dem_term(perimeter=perimeter, p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, area=area, dAdz_div=dAdz_div, dAdz_conv=dAdz_conv),
+                    dem_term_angielczyk_2(p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, dAdz_div=dAdz_div, dAdz_conv=dAdz_conv), # dem_term(perimeter=perimeter, p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, area=area, dAdz_div=dAdz_div, dAdz_conv=dAdz_conv),
                 ]
             )
             
@@ -975,14 +1012,15 @@ def pipeline_steady_state_1D_autonomous(
     elif mach_in is not None:
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
-        mach_impossible = 0.1
-        mach_possible = 0.0001
+        mach_impossible = 0.01
+        mach_possible = 0.000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        m_impossible = 0.04
-        m_possible = 0.01
+        m_impossible = 0.031
+        m_possible = 0.031
+
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
@@ -996,28 +1034,13 @@ def pipeline_steady_state_1D_autonomous(
  
         try:
             # Thermodynamic state from perfect gas properties
-        
 
+        
             # Calculate area and geometry properties for convergent-divergent nozzles
             area, area_slope, perimeter, radius, dAdz_div, dAdz_conv = get_linear_convergent_divergent(
                 z_coordinate=z, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
                 radius_out=radius_out, width=width, type=nozzle_type)
             diameter = radius*2
-            # print("area", area)
-            # print("perimeter", perimeter)
-
-            # # Wall friction calculations
-            # stress_wall, friction_factor, reynolds = get_wall_friction(
-            #     velocity=v,
-            #     density=rho,
-            #     viscosity=state["mu"],
-            #     roughness=roughness,
-            #     diameter=diameter,
-            # )
-
-            if not include_friction:
-                stress_wall = 0.0
-                friction_factor = 0.0
 
             # Heat transfer (if applicable)
             if include_heat_transfer:
@@ -1035,7 +1058,7 @@ def pipeline_steady_state_1D_autonomous(
             drhodp_L = temp_L.first_saturation_deriv(CP.iDmass, CP.iP)
             dvdp_L = -1.0 / (rho_L**2) * drhodp_L
             dhdp_L = temp_L.first_saturation_deriv(CP.iHmass, CP.iP)
-
+            
             # Saturated vapor properties(bpy.fluid_properties.PT_INPUTS, p_stagnation, T_stagnation)
             state_V = fluid.get_state(bpy.fluid_properties.PQ_INPUTS, p, 1.00)
             rho_V = state_V.d
@@ -1081,6 +1104,19 @@ def pipeline_steady_state_1D_autonomous(
                     [0.0, 1.0, 0.0, 0.0],
                 ]
             )
+
+            # # Wall friction calculations
+            stress_wall, friction_factor, reynolds = get_wall_friction(
+                velocity=v,
+                density=rho_m,
+                viscosity=state["mu"],
+                roughness=roughness,
+                diameter=diameter,
+            )
+
+            if not include_friction:
+                stress_wall = 0.0
+                friction_factor = 0.0
             
             # Right-hand side of the system for DEM
             b = np.asarray(
@@ -1088,7 +1124,8 @@ def pipeline_steady_state_1D_autonomous(
                     spec_vol_mix / area * area_slope,
                     -perimeter / area * stress_wall,
                     0.0, # To modify in case of heat transfer to be included
-                    dem_term(perimeter=perimeter, p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, area=area, dAdz_div=dAdz_div, dAdz_conv=dAdz_conv),
+                    dem_term_angielczyk_2(p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, dAdz_div=dAdz_div, dAdz_conv=dAdz_conv), 
+                    # dem_term_angielczyk_1(perimeter=perimeter, p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, area=area),
                 ]
             )
             
@@ -1117,10 +1154,6 @@ def pipeline_steady_state_1D_autonomous(
             dy = [det_M, det_M1, det_M2, det_M3, det_M4]
 
             quality = x
-            # print("y:", y)
-            # print("x", x)
-            # print(y-x)
-            # print(" ")
 
             # Save the output at each step in the dictionary
             out = {
@@ -1266,6 +1299,7 @@ def pipeline_steady_state_1D_autonomous(
                 "determinant": det_M,
                 "two_phase_flag": two_phase_flag,
                 "quality": quality,
+                "stable_fraction": 0,
             }
 
             # Append the output dictionary to out_list
@@ -1292,15 +1326,19 @@ def pipeline_steady_state_1D_autonomous(
         det_M = out["determinant"]
         return det_M
     stop_at_zero_det_DEM.terminal = True
-    stop_at_zero_det_DEM.direction = -1  # Only trigger when approaching from above
+    stop_at_zero_det_DEM.direction = 0
 
-    # As in this method we are not integrating in the space variable x but for the dummy
-    # variable t, it is necessary to stop when the length of the nozzle is achieved
     def stop_at_length(t, y):
         x = y[0]               
         return x - total_length      
     stop_at_length.terminal = True     
-    stop_at_length.direction = 1  
+    stop_at_length.direction = 1 
+
+    def stop_at_inlet(t, y):
+        x = y[0]
+        return x  # Will be zero or negative when at or past the inlet
+    stop_at_inlet.terminal = True  # Stop the solver when event is triggered
+    stop_at_inlet.direction = -1 
 
     def stop_at_two_phase(t, y):
         _, out = odefun_HEM(y)
@@ -1338,14 +1376,13 @@ def pipeline_steady_state_1D_autonomous(
                 method="RK45",
                 rtol=1e-9,
                 atol=1e-9,
-                events=[stop_at_length, stop_at_zero_det_HEM, stop_at_two_phase]
+                events=[stop_at_two_phase]
             )
-
             solution_1 = postprocess_ode_autonomous(raw_solution_1.t, raw_solution_1.y, odefun_HEM)
             solution = solution_1
             raw_solution_2 = None  # Ensure it's defined for later logic
 
-            if raw_solution_1.t_events[2].size > 0:
+            if raw_solution_1.t_events[0].size > 0:
 
                 raw_solution_2 = scipy.integrate.solve_ivp(
                     lambda t, y: odefun_DEM(y)[0],
@@ -1358,6 +1395,7 @@ def pipeline_steady_state_1D_autonomous(
                     events=[stop_at_length, stop_at_zero_det_DEM]
                 )
                 solution_2 = postprocess_ode_autonomous(raw_solution_2.t, raw_solution_2.y, odefun_DEM)
+                
                 all_keys = set(solution_1.keys()) | set(solution_2.keys())
                 for key in all_keys:
                     data_1 = solution_1.get(key, [])
@@ -1368,10 +1406,10 @@ def pipeline_steady_state_1D_autonomous(
                         np.atleast_1d(data_2)
                     ])
 
-            if raw_solution_2 is not None and raw_solution_2.t_events[1].size > 0:
-                m_impossible = m_guess
-            else:
-                m_possible = m_guess
+                if raw_solution_2 is not None and raw_solution_2.t_events[1].size > 0:
+                    m_impossible = m_guess
+                else:
+                    m_possible = m_guess
 
             m_guess = (m_impossible + m_possible) / 2
             u_guess = m_guess / (density_in * area_in)
@@ -1478,7 +1516,7 @@ def pipeline_steady_state_1D_autonomous(
             method="RK45",
             rtol=1e-9,
             atol=1e-9,
-            events=[stop_at_length, stop_at_two_phase]
+            events=[stop_at_length, stop_at_two_phase, stop_at_inlet]
         )
 
         solution_1 = postprocess_ode_autonomous(raw_solution_1.t, raw_solution_1.y, odefun_HEM)
@@ -1493,7 +1531,7 @@ def pipeline_steady_state_1D_autonomous(
                 method="RK45",
                 rtol=1e-9,
                 atol=1e-9,
-                events=[stop_at_length, stop_at_zero_det_DEM]
+                events=[stop_at_length, stop_at_inlet, stop_at_zero_det_DEM]
             )
             solution_2 = postprocess_ode_autonomous(raw_solution_2.t, raw_solution_2.y, odefun_DEM)
 
@@ -1522,19 +1560,22 @@ def pipeline_steady_state_1D_autonomous(
 
         print("STARTING SUPERSONIC")
 
+        arr = solution["determinant"]
+        first_negative_index = int(np.flatnonzero(arr < 0)[0]) if np.any(arr < 0) else -1
+
         supersonic_solution_1 = scipy.integrate.solve_ivp(
             lambda t, y: odefun_DEM(y)[0],
             [1, 0],
-            [convergent_length*1.001, solution["quality"][-1], solution["stable_fraction"][-1], solution["pressure"][-1]*0.99, solution["velocity"][-1]*1.05],
+            [solution["distance"][first_negative_index], solution["quality"][first_negative_index], solution["stable_fraction"][first_negative_index], solution["pressure"][first_negative_index], solution["velocity"][first_negative_index]*1.1],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="RK45",
             rtol=1e-9,
             atol=1e-9,
-            events=[stop_at_length]
+            events=[stop_at_length, stop_at_inlet]
         )
         supersonic_solution_1 = postprocess_ode_autonomous(supersonic_solution_1.t, supersonic_solution_1.y, odefun_DEM)
         supersonic_solution = supersonic_solution_1
-
+ 
         supersonic_solution_2 = scipy.integrate.solve_ivp(
             lambda t, y: odefun_HEM(y)[0],
             [1, 0],
@@ -1543,7 +1584,7 @@ def pipeline_steady_state_1D_autonomous(
             method="RK45",
             rtol=1e-9,
             atol=1e-9,
-            events=[stop_at_length]
+            events=[stop_at_length, stop_at_inlet]
         )
         supersonic_solution_2 = postprocess_ode_autonomous(supersonic_solution_2.t, supersonic_solution_2.y, odefun_HEM)
 
@@ -1553,6 +1594,16 @@ def pipeline_steady_state_1D_autonomous(
             data_2 = supersonic_solution_2.get(key, [])[1:]  # skip the first point to avoid duplication
 
             supersonic_solution[key] = np.concatenate([
+                np.atleast_1d(data_1),
+                np.atleast_1d(data_2)
+            ])
+
+        all_keys = set(solution.keys()) | set(supersonic_solution.keys())
+        for key in all_keys:
+            data_1 = solution.get(key, [])
+            data_2 = supersonic_solution.get(key, [])[1:]  # skip the first point to avoid duplication
+
+            solution[key] = np.concatenate([
                 np.atleast_1d(data_1),
                 np.atleast_1d(data_2)
             ])
@@ -1577,5 +1628,5 @@ def pipeline_steady_state_1D_autonomous(
         flow_rate = velocity_in*density_in*area_in
  
 
-    return supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations
+    return possible_solution, impossible_solution, solution, flow_rate, pif_iterations
 

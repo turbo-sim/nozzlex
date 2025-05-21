@@ -738,12 +738,14 @@ def pipeline_steady_state_1D_autonomous(
     elif mach_in is not None:
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
-        mach_impossible = 0.25
-        mach_possible = 0.00000000000001
+        mach_impossible = 0.02
+        mach_possible = 0.001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
+        m_possible = 0.02535
+        m_impossible = 0.02535
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
@@ -811,17 +813,17 @@ def pipeline_steady_state_1D_autonomous(
             M3[:, 2] = b
             
             # Compute determinants
-            det_M = det(M)
-            det_M1 = det(M1)
-            det_M2 = det(M2)
-            det_M3 = det(M3)
+            det_D = det(M)
+            det_N1 = det(M1)
+            det_N2 = det(M2)
+            det_N3 = det(M3)
             # print("det 1", det_M)
             # print("det 2", det_M1)
             # print("det 3", det_M2)
             # print("det 4", det_M3)
             # print(" ")
         
-            dy = [det_M, det_M1, det_M2, det_M3]
+            dy = [det_D, det_N1, det_N2, det_N3]
 
             # Save the output at each step in the dictionary
             out = {
@@ -846,7 +848,10 @@ def pipeline_steady_state_1D_autonomous(
                 "reynolds": reynolds,
                 "source_1": b[0],
                 "source_2": b[1],
-                "determinant": det_M,
+                "determinant_D": det_D,
+                "determinant_N1": det_N1,
+                "determinant_N2": det_N2,
+                "determinant_N3": det_N3,
             }
 
             # Append the output dictionary to out_list
@@ -862,7 +867,7 @@ def pipeline_steady_state_1D_autonomous(
     # is singular (backward flow)    
     def stop_at_zero_det(t, y):
         _, out = odefun(y)
-        det_M = out["determinant"]
+        det_M = out["determinant_D"]
         return det_M
 
     stop_at_zero_det.terminal = True  # Stop when det(M) = 0
@@ -930,7 +935,7 @@ def pipeline_steady_state_1D_autonomous(
             events=[stop_at_length, stop_at_zero_det]
         )     
         possible_solution = postprocess_ode_autonomous(possible_solution.t, possible_solution.y, odefun)
-
+        
         # Calculate the solution with the last impossible flow rate calculated
         u_impossible = m_impossible/(density_in * area_in)
         impossible_solution = scipy.integrate.solve_ivp(
@@ -962,23 +967,23 @@ def pipeline_steady_state_1D_autonomous(
         mass_flow = solution["mass_flow"][0]
         density = solution["density"][-1]
         x = convergent_length*1.00001
-        area, area_slope, perimeter, radius = get_linear_convergent_divergent(x, 
-                                                                              convergent_length=convergent_length,
-                                                                              divergent_length=divergent_length,
-                                                                              radius_in=radius_in,
-                                                                              radius_out=radius_out,
-                                                                              radius_throat=radius_throat,
-                                                                              width=width,
-                                                                              type=nozzle_type)
+        area, _, _, _ = get_linear_convergent_divergent(x, 
+                                                        convergent_length=convergent_length,
+                                                        divergent_length=divergent_length,
+                                                        radius_in=radius_in,
+                                                        radius_out=radius_out,
+                                                        radius_throat=radius_throat,
+                                                        width=width,
+                                                        type=nozzle_type)
         velocity = mass_flow/(density*area)
 
         supersonic_solution = scipy.integrate.solve_ivp(
             lambda t, y: odefun(y)[0],
             [1, 0], # Inverting dummy variable limits so you so not go backward at the singularity (all the determinants<0)
             [x,
-             velocity*1.01, 
-             solution["density"][-1]*0.99, 
-             solution["pressure"][-1]*0.99],
+             velocity, 
+             solution["density"][-1], 
+             solution["pressure"][-1]],
             t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="RK45",
             rtol=1e-9,
@@ -986,7 +991,7 @@ def pipeline_steady_state_1D_autonomous(
             events=[stop_at_length, stop_at_zero]
         ) 
         supersonic_solution = postprocess_ode_autonomous(supersonic_solution.t, supersonic_solution.y, odefun) 
-
+        print("rate out", supersonic_solution["mass_flow"][-1])
     # To fix:
     else:
         pif_iterations = None
