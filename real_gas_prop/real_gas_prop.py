@@ -303,6 +303,7 @@ class Fluid:
                 raise e
 
         return FluidState(self.properties)
+    
 
     def compute_properties_1phase(self):
         """Get single-phase properties from CoolProp low level interface"""
@@ -331,6 +332,8 @@ class Fluid:
         props["Q"] = np.nan
         props["quality_mass"] = np.nan
         props["quality_volume"] = np.nan
+        props["drho_dP"] = self._AS.first_partial_deriv(CP.iDmass, CP.iP, CP.iHmass)
+        props["drho_dh"] = self._AS.first_partial_deriv(CP.iDmass, CP.iHmass, CP.iP)
 
         return props
 
@@ -352,6 +355,7 @@ class Fluid:
         # Saturated liquid properties
         temp.update(CP.QT_INPUTS, 0.00, T_mix)
         rho_L = temp.rhomass()
+        h_L = temp.hmass()
         cp_L = temp.cpmass()
         cv_L = temp.cvmass()
         k_L = temp.conductivity()
@@ -362,6 +366,7 @@ class Fluid:
         # Saturated vapor properties
         temp.update(CP.QT_INPUTS, 1.00, T_mix)
         rho_V = temp.rhomass()
+        h_V = temp.hmass()
         cp_V = temp.cpmass()
         cv_V = temp.cvmass()
         k_V = temp.conductivity()
@@ -369,13 +374,14 @@ class Fluid:
         speed_sound_V = temp.speed_sound()
         dsdp_V = temp.first_saturation_deriv(CP.iSmass, CP.iP)
 
-        # Volume fractions of vapor and liquid
-        vol_frac_V = (rho_mix - rho_L) / (rho_V - rho_L)
-        vol_frac_L = 1.00 - vol_frac_V
-
         # Mass fractions of vapor and liquid
-        mass_frac_V = (1 / rho_mix - 1 / rho_L) / (1 / rho_V - 1 / rho_L)
-        mass_frac_L = 1.00 - mass_frac_V
+        mass_frac_V = (h_mix - h_L) / (h_V - h_L)
+        mass_frac_L = 1.0 - mass_frac_V
+
+        # Volume fractions of vapor and liquid
+        v_mix = 1.0 / rho_mix
+        vol_frac_V = mass_frac_V * (1 / rho_V) / v_mix
+        vol_frac_L = mass_frac_L * (1 / rho_L) / v_mix
 
         # Heat capacities of the two-phase mixture
         cp_mix = mass_frac_L * cp_L + mass_frac_V * cp_V
@@ -406,6 +412,45 @@ class Fluid:
         else:
             a_HEM = (1 / rho_mix / compressibility_HEM) ** 0.5
 
+        # Define small perturbations
+        delta_p = 1  # Pa
+        delta_h = 1  # J/kg
+
+        # Perturb pressure keeping h fixed (forward difference)
+        AS_p_base = CP.AbstractState(self.backend, self.name)
+        AS_p_base.update(CP.HmassP_INPUTS, h_mix, p_mix)
+        rho_base_p = AS_p_base.rhomass()
+
+        AS_p_plus = CP.AbstractState(self.backend, self.name)
+        AS_p_plus.update(CP.HmassP_INPUTS, h_mix, p_mix + delta_p)
+        rho_p_plus = AS_p_plus.rhomass()
+
+        drho_dP = (rho_p_plus - rho_base_p) / delta_p
+        # print("drho_dP FD (forward)", drho_dP)
+
+        # Perturb enthalpy keeping p fixed (forward difference)
+        AS_h_base = CP.AbstractState(self.backend, self.name)
+        AS_h_base.update(CP.HmassP_INPUTS, h_mix, p_mix)
+        rho_base_h = AS_h_base.rhomass()
+
+        AS_h_plus = CP.AbstractState(self.backend, self.name)
+        AS_h_plus.update(CP.HmassP_INPUTS, h_mix + delta_h, p_mix)
+        rho_h_plus = AS_h_plus.rhomass()
+
+        drho_dh = (rho_h_plus - rho_base_h) / delta_h
+        # print("drho_dh FD (forward)", drho_dh)
+
+        # For reference, CoolProp's internal two-phase derivatives
+        try:
+            drho_dP = self._AS.first_two_phase_deriv(CP.iDmass, CP.iP, CP.iHmass)
+            # print("drho_dP (CoolProp)", drho_dP_exact)
+
+            drho_dh = self._AS.first_two_phase_deriv(CP.iDmass, CP.iHmass, CP.iP)
+            # print("drho_dh (CoolProp)", drho_dh_exact)
+        except ValueError as e:
+            print("CoolProp derivative error:", e)
+
+
         # Store properties in dictionary
         properties = {}
         properties["T"] = T_mix
@@ -430,6 +475,8 @@ class Fluid:
         properties["Q"] = mass_frac_V
         properties["quality_mass"] = mass_frac_V
         properties["quality_volume"] = vol_frac_V
+        properties["drho_dP"] = drho_dP
+        properties["drho_dh"] = drho_dh
 
         return properties
 

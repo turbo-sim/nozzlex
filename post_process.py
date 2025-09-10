@@ -27,7 +27,7 @@ for i, (key, label) in enumerate(zip(quantities, labels)):
     ax.plot(df2["distance"], df2[key], label="IDEM2", linestyle='--', linewidth = 1.5, color = colors[6])
     # ax.set_title(label)
     ax.set_xlabel("Distance (m)", fontsize=14)
-    ax.set_ylabel(label, fontsize=14, labelpad = 1)
+    ax.set_ylabel(label, fontsize=14, labelpad=1)
     ax.legend(loc="best")
     ax.grid(True)
 
