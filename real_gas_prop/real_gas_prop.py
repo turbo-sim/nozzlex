@@ -443,10 +443,10 @@ class Fluid:
         # For reference, CoolProp's internal two-phase derivatives
         try:
             drho_dP = self._AS.first_two_phase_deriv(CP.iDmass, CP.iP, CP.iHmass)
-            # print("drho_dP (CoolProp)", drho_dP_exact)
+            # print("drho_dP (CoolProp)", drho_dP)
 
             drho_dh = self._AS.first_two_phase_deriv(CP.iDmass, CP.iHmass, CP.iP)
-            # print("drho_dh (CoolProp)", drho_dh_exact)
+            # print("drho_dh (CoolProp)", drho_dh)
         except ValueError as e:
             print("CoolProp derivative error:", e)
 

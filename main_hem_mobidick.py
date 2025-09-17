@@ -12,15 +12,14 @@ import barotropy as bpy # Only used to plot the Ts and Ph diagrams, not for eval
 # ====================================================
 # === 1. IMPORT SETTINGS                           ===
 # ====================================================
-with open("settings.yaml", 'r') as file:
+
+with open("settings_mobidick.yaml", 'r') as file:
     case_data = yaml.safe_load(file)
 
-import functions_hem_cp as function
-
-# if case_data["fluid"]["look_up_table"] is False:
-#     import functions_hem_cp as function
-# else:
-#     import functions_hem_lut as function
+if case_data["fluid"]["look_up_table"] is False:
+    import functions_hem_cp_mobidick as function
+else:
+    import functions_hem_lut as function
 
 # Upload fluid parameters from yaml file
 fluid_name = case_data["fluid"]["fluid_name"]
@@ -52,11 +51,15 @@ critical_flow = case_data["boundary_conditions"]["critical_flow"]
 state_in = fluid.set_state(real_gas_prop.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
-
-supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous(
+_, possible_solution, _, _, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous(
     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
-    nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=False, include_heat_transfer=False)
+    nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=True, include_heat_transfer=False)
+
+# solution, solution_supersonic = function.pipeline_steady_state_1D_critical(
+#     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
+#     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
+#     nozzle_type=nozzle_type, mass_flow=52.3, include_friction=True, include_heat_transfer=False)
 
 # Calculate the duration
 end_time = time.time()
@@ -69,13 +72,13 @@ duration = end_time - start_time
 
 # os.system('cls')
 bpy.print_dict(case_data)
-print(" ")
-print("Mach at the inlet:                         ", f"{solution["mach_number"][0]:.4f}", "(-)")
-print("Mach at the throat:                        ", f"{solution["mach_number"][-1]:.4f}", "(-)")
-print("Critical lenght:                           ", f"{solution["distance"][-1]:.4f}", "(m)")
-print("Flow rate:                                 ", f"{flow_rate:.7f}", "(kg/s)")
-print("PIF number of iterations:                  ", pif_iterations)
-print("Computation time:                          ", f"{duration:.4f} seconds")
+# print(" ")
+# print("Mach at the inlet:                         ", f"{solution["mach_number"][0]:.4f}", "(-)")
+# print("Mach at the throat:                        ", f"{solution["mach_number"][-1]:.4f}", "(-)")
+# print("Critical lenght:                           ", f"{solution["distance"][-1]:.4f}", "(m)")
+# print("Flow rate:                                 ", f"{flow_rate:.7f}", "(kg/s)")
+# print("PIF number of iterations:                  ", pif_iterations)
+# print("Computation time:                          ", f"{duration:.4f} seconds")
 
 
 # ====================================================
@@ -130,26 +133,26 @@ fig, axs = plt.subplots(2, 2, figsize=(12, 9))
 ax1 = axs[0, 0]
 ax1.set_xlabel("Axis position [-]", fontsize=14)
 ax1.set_ylabel("Normalized static pressure [-]", fontsize=14)
-ax1.plot(
-    impossible_solution["distance"],
-    impossible_solution["pressure"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Impossible flow",
-)
-ax1.plot(
-    solution["distance"],
-    solution["pressure"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Critical flow",
-)
+# ax1.plot(
+#     impossible_solution["distance"],
+#     impossible_solution["pressure"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Impossible flow",
+# )
+# ax1.plot(
+#     solution["distance"],
+#     solution["pressure"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Critical flow",
+# )
 ax1.plot(
     possible_solution["distance"],
     possible_solution["pressure"],
@@ -160,16 +163,16 @@ ax1.plot(
     markerfacecolor="w",
     label="Possible flow",
 )
-ax1.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["pressure"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch",
-)
+# ax1.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["pressure"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch",
+# )
 ax1.legend(loc="best")
 # figure.tight_layout(pad=1)
 
@@ -178,26 +181,26 @@ ax1.legend(loc="best")
 ax2 = axs[0, 1]
 ax2.set_xlabel("Axis position [-]", fontsize=14)
 ax2.set_ylabel("Velocity [m/s]", fontsize=14)
-ax2.plot(
-    solution["distance"],
-    solution["velocity"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Critical flow",
-)
-ax2.plot(
-    impossible_solution["distance"],
-    impossible_solution["velocity"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Impossible flow",
-)
+# ax2.plot(
+#     solution["distance"],
+#     solution["velocity"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Critical flow",
+# )
+# ax2.plot(
+#     impossible_solution["distance"],
+#     impossible_solution["velocity"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Impossible flow",
+# )
 ax2.plot(
     possible_solution["distance"],
     possible_solution["velocity"],
@@ -208,16 +211,16 @@ ax2.plot(
     markerfacecolor="w",
     label="Possible flow",
 )
-ax2.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["velocity"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch",
-)
+# ax2.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["velocity"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch",
+# )
 ax2.legend(loc="best")
 # figure.tight_layout(pad=1)
 
@@ -226,26 +229,26 @@ ax2.legend(loc="best")
 ax3 = axs[1, 0]
 ax3.set_xlabel("Axis position [-]", fontsize=14)
 ax3.set_ylabel("Mach number [-]", fontsize=14)
-ax3.plot(
-    solution["distance"],
-    solution["mach_number"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Critical flow",
-)
-ax3.plot(
-    impossible_solution["distance"],
-    impossible_solution["mach_number"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Impossible flow",
-)
+# ax3.plot(
+#     solution["distance"],
+#     solution["mach_number"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Critical flow",
+# )
+# ax3.plot(
+#     impossible_solution["distance"],
+#     impossible_solution["mach_number"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Impossible flow",
+# )
 ax3.plot(
     possible_solution["distance"],
     possible_solution["mach_number"],
@@ -256,16 +259,16 @@ ax3.plot(
     markerfacecolor="w",
     label="Possible flow",
 )
-ax3.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["mach_number"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="Supersonic branch",
-)
+# ax3.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["mach_number"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="Supersonic branch",
+# )
 ax3.legend(loc="best")
 # figure.tight_layout(pad=1)
 
@@ -284,26 +287,26 @@ ax4.plot(
     markerfacecolor="w",
     label="equilibrium quality",
 )
-ax4.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["entropy"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="equilibrium quality",
-)
-ax4.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["entropy"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="quality",
-)
+# ax4.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["entropy"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="equilibrium quality",
+# )
+# ax4.plot(
+#     supersonic_solution["distance"],
+#     supersonic_solution["entropy"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="quality",
+# )
 ax4.legend(loc="best")
 plt.show()
 figure.tight_layout(pad=1)
