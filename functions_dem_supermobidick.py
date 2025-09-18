@@ -13,6 +13,7 @@ import CoolProp.CoolProp as CP
 import barotropy as bpy
 import pandas as pd
 import os
+from SmoothWallNozzleGeometry import SmoothWallNozzleGeometry
 
 
 
@@ -1027,6 +1028,18 @@ def pipeline_steady_state_1D_autonomous(
     # Initialize out_list to store all the state outputs
     out_list = []
 
+    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\space_marching\Super_Moby_Dick_Water_Nozzle.csv")
+    SuperMobiDick.discretize_geometry() 
+    # SuperMobiDick.visualize_geometry()
+    SuperMobiDick.calculate_inclination_angles()
+    SuperMobiDick.compute_circumferential_areas()
+    pressure_gradient_areas = SuperMobiDick.get_pressure_gradient_areas()
+    shear_stress_areas = SuperMobiDick.get_shear_stress_areas() 
+    cross_sectional_areas = SuperMobiDick.get_sectional_areas()
+
+    sectional_positions = SuperMobiDick.get_sectional_positions()
+    sectional_radii = SuperMobiDick.get_sectional_heights()
+    
     # Define the ODE system
     def odefun_DEM(Y):
 
@@ -1037,10 +1050,26 @@ def pipeline_steady_state_1D_autonomous(
 
         
             # Calculate area and geometry properties for convergent-divergent nozzles
-            area, area_slope, perimeter, radius, dAdz_div, dAdz_conv = get_linear_convergent_divergent(
-                z_coordinate=z, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
-                radius_out=radius_out, width=width, type=nozzle_type)
-            diameter = radius*2
+            # area, area_slope, perimeter, radius, dAdz_div, dAdz_conv = get_linear_convergent_divergent(
+            #     z_coordinate=z, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
+            #     radius_out=radius_out, width=width, type=nozzle_type)
+            # diameter = radius*2
+
+            # Interpolate geometry-dependent parameters
+            area = np.interp(
+                x, sectional_positions,
+                cross_sectional_areas
+            )
+            dA_dz = (np.interp(
+                x + 1e-3, sectional_positions,
+                cross_sectional_areas
+            ) - area) / 1e-3  
+            height = np.interp(
+                x, sectional_positions,
+                sectional_radii
+            )  
+            p_wall = 2 * np.pi * height  # Wetted perimeter for circular cross-section
+
 
             # Heat transfer (if applicable)
             if include_heat_transfer:
@@ -1111,7 +1140,7 @@ def pipeline_steady_state_1D_autonomous(
                 density=rho_m,
                 viscosity=state["mu"],
                 roughness=roughness,
-                diameter=diameter,
+                diameter=2*height,
             )
 
             if not include_friction:
@@ -1121,11 +1150,11 @@ def pipeline_steady_state_1D_autonomous(
             # Right-hand side of the system for DEM
             b = np.asarray(
                 [
-                    spec_vol_mix / area * area_slope,
-                    -perimeter / area * stress_wall,
+                    spec_vol_mix / area * dA_dz,
+                    -p_wall / area * stress_wall,
                     0.0, # To modify in case of heat transfer to be included
-                    # dem_term_angielczyk_2(p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, dAdz_div=dAdz_div, dAdz_conv=dAdz_conv), 
-                    dem_term_angielczyk_1(perimeter=perimeter, p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, area=area),
+                    dem_term_angielczyk_2(p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, dAdz_div=-0.1490*np.pi, dAdz_conv=0), 
+                    # dem_term_angielczyk_1(perimeter=perimeter, p=p, y=y, p_sat_T_LM=p_sat_T_LM, p_cr=p_cr, area=area),
                 ]
             )
             
@@ -1170,9 +1199,9 @@ def pipeline_steady_state_1D_autonomous(
                 "mach_number": v / state["a"],
                 "mass_flow": v * rho_m * area,
                 "area": area,
-                "area_slope": area_slope,
-                "perimeter": perimeter,
-                "diameter": diameter,
+                "area_slope": dA_dz,
+                "perimeter": p_wall,
+                "diameter": 2*height,
                 "stress_wall": stress_wall,
                 "friction_factor": friction_factor,
                 # "reynolds": reynolds,

@@ -1274,12 +1274,11 @@ def pipeline_steady_state_1D_autonomous(
         _, out = odefun(y)
         det_M = out["determinant_D"]
         return det_M
-
     stop_at_zero_det.terminal = True  # Stop when det(M) = 0
     stop_at_zero_det.direction = 0   # Trigger event when det(M) == 0, no direction preference
     
     # As in this method we are not integrating in the space variable x but for the dummy
-    # variable t, it is necessary to stop when the length of the nozzle is achieved
+    # variable t, it is necessary to stop when the length of the nozzle is reached
     def stop_at_length(t, y):
         x = y[0]               
         return x - 0.463      
@@ -1289,7 +1288,6 @@ def pipeline_steady_state_1D_autonomous(
     def stop_at_zero(t, y):
         x = y[0]  # assuming y[0] is the nozzle length variable (x)
         return x  
-
     stop_at_zero.terminal = True
     stop_at_zero.direction = -1 
 
@@ -1422,3 +1420,360 @@ def pipeline_steady_state_1D_autonomous(
 
     return supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations
 
+def pipeline_steady_state_1D_autonomous_deriv(
+    fluid_name,
+    pressure_in,
+    temperature_in,
+    properties_in,
+    convergent_length,
+    divergent_length,
+    roughness,
+    radius_in,
+    radius_throat,
+    radius_out,
+    nozzle_type,
+    width,
+    mass_flow=None,
+    mach_in=None,
+    critical_flow = False,
+    include_friction=True,
+    include_heat_transfer=False,
+    temperature_external=None,
+    number_of_points=None,
+):
+    # Check for correct inputs
+    if (
+        (mass_flow is None and mach_in is None and critical_flow is False) or 
+        (mass_flow is not None and mach_in is not None) 
+    ):
+        raise ValueError(
+            "Check input settins for the velocity."
+        )
+    
+    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    
+    # Define inlet area and length of the nozzle
+    total_length = convergent_length+divergent_length
+    if nozzle_type == "Planar":
+        area_in = 2*radius_in*width
+    elif nozzle_type == "Axisymmetric":
+        area_in = np.pi*radius_in**2
+
+    # Calculate inlet density
+    density_in = properties_in.rho
+    enthalpy_in = properties_in.h
+
+    # Calculate velocity based on specified parameter
+    if mass_flow is not None:
+        velocity_in = mass_flow / (area_in * density_in)
+    elif mach_in is not None:
+        velocity_in = mach_in * properties_in["a"]
+    elif critical_flow is True:
+        mach_impossible = 0.25
+        mach_possible = 0.0000001
+        u_impossible = mach_impossible*properties_in.a
+        u_possible = mach_possible*properties_in.a
+        m_impossible = density_in*u_impossible*area_in
+        m_possible = density_in*u_possible*area_in
+        # m_possible = 10
+        # m_impossible = 10
+        m_guess = (m_impossible+m_possible) / 2
+        u_guess = m_guess / (density_in * area_in)
+
+    # Initialize out_list to store all the state outputs
+    out_list = []
+
+    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\space_marching\Super_Moby_Dick_Water_Nozzle.csv")
+    SuperMobiDick.discretize_geometry() 
+    # SuperMobiDick.visualize_geometry()
+    SuperMobiDick.calculate_inclination_angles()
+    SuperMobiDick.compute_circumferential_areas()
+    pressure_gradient_areas = SuperMobiDick.get_pressure_gradient_areas()
+    shear_stress_areas = SuperMobiDick.get_shear_stress_areas() 
+    cross_sectional_areas = SuperMobiDick.get_sectional_areas()
+
+    sectional_positions = SuperMobiDick.get_sectional_positions()
+    sectional_radii = SuperMobiDick.get_sectional_heights()
+    
+    
+    # Define the ODE system
+    def odefun(y):
+        x, p, v, h = y  # position, velocity, density, pressure
+
+        try:
+            # Thermodynamic state from perfect gas properties
+            state = fluid.set_state(HmassP_INPUTS, h, p)
+            rho = state["rho"]
+            drho_dP = state["drho_dP"]
+            drho_dh = state["drho_dh"]
+
+            # # Calculate area and geometry properties for convergent-divergent nozzles
+            # area, area_slope, perimeter, radius = get_linear_convergent_divergent(
+            #     length=x, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
+            #     radius_out=radius_out, width=width, type=nozzle_type)
+            # diameter = radius*2
+
+            # Interpolate geometry-dependent parameters
+            area = np.interp(
+                x, sectional_positions,
+                cross_sectional_areas
+            )
+            dA_dz = (np.interp(
+                x + 1e-3, sectional_positions,
+                cross_sectional_areas
+            ) - area) / 1e-3  
+            height = np.interp(
+                x, sectional_positions,
+                sectional_radii
+            )  
+            p_wall = 2 * np.pi * height  # Wetted perimeter for circular cross-section
+
+
+            # Wall friction calculations
+            stress_wall, friction_factor, reynolds = get_wall_friction(
+                velocity=v,
+                density=rho,
+                viscosity=state["mu"],
+                roughness=roughness,
+                diameter=2*height,
+            )
+            # if not include_friction:
+            #     stress_wall = 0.0
+            #     friction_factor = 0.0
+
+            # Heat transfer (if applicable)
+            if include_heat_transfer:
+                U = 10 # To include correlations 
+            else:
+                U = 0.0
+                heat_in = 0
+
+            # Coefficient matrix M for ODE system
+            M = np.asarray(
+                [
+                    [v * drho_dP,    rho,          v * drho_dh],
+                    [1,              rho * v,      0.00],
+                    [v,              0.00,          +rho * v],
+                ]
+            )
+
+            # Right-hand side of the system
+            b = np.asarray(
+                [
+                    -rho * v / area * dA_dz,
+                    -p_wall / area * stress_wall,
+                    -v * stress_wall * p_wall / area,
+                ]
+            )
+
+            M1 = M.copy()
+            M1[:, 0] = b
+            M2 = M.copy()
+            M2[:, 1] = b
+            M3 = M.copy()
+            M3[:, 2] = b
+            
+            # Compute determinants
+            det_D = det(M)
+            det_N1 = det(M1)
+            det_N2 = det(M2)
+            det_N3 = det(M3)
+            # print("det 1", det_D)
+            # print("det 2", det_N1)
+            # print("det 3", det_N2)
+            # print("det 4", det_N3)
+            # print(" ")
+        
+            dy = [det_D, det_N1, det_N2, det_N3]
+
+            # Save the output at each step in the dictionary
+            out = {
+                "distance": x,
+                "velocity": v,
+                "density": rho,
+                "pressure": p,
+                "quality": state["Q"],
+                "temperature": state["T"],
+                "speed_of_sound": state["a"],
+                "viscosity": state["mu"],
+                "enthalpy": state["h"],
+                "entropy": state["s"],
+                "total_enthalpy": state["h"] + 0.5 * v**2,
+                "mach_number": v / state["a"],
+                "mass_flow": v * rho * area,
+                "area": area,
+                "area_slope": dA_dz,
+                "perimeter": p_wall,
+                "diameter": 2*height,
+                "stress_wall": stress_wall,
+                "friction_factor": friction_factor,
+                "reynolds": reynolds,
+                "source_1": b[0],
+                "source_2": b[1],
+                "determinant_D": det_D,
+                "determinant_N1": det_N1,
+                "determinant_N2": det_N2,
+                "determinant_N3": det_N3,
+            }
+
+            # Append the output dictionary to out_list
+            out_list.append(out)
+
+            return dy, out
+        
+        except Exception as e:
+            # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            return [np.nan, np.nan, np.nan, np.nan]  # forces integrator to stop
+
+    # This function avoid to keep solving for the Impossible Flow when the matrix
+    # is singular (backward flow)    
+    def stop_at_zero_det(t, y):
+        _, out = odefun(y)
+        det_M = out["determinant_D"]
+        return det_M
+    stop_at_zero_det.terminal = True  # Stop when det(M) = 0
+    stop_at_zero_det.direction = 0   # Trigger event when det(M) == 0, no direction preference
+    
+    # As in this method we are not integrating in the space variable x but for the dummy
+    # variable t, it is necessary to stop when the length of the nozzle is achieved
+    def stop_at_length(t, y):
+        x = y[0]               
+        return x - 0.463      
+    stop_at_length.terminal = True     
+    stop_at_length.direction = 1  
+
+    def stop_at_zero(t, y):
+        x = y[0]  # assuming y[0] is the nozzle length variable (x)
+        return x  
+
+    stop_at_zero.terminal = True
+    stop_at_zero.direction = -1 
+
+    # Possible-impossible flow (PIF) algorithm to find critical flow rate
+    if critical_flow is True: 
+        pif_iterations = 0
+        print("Possible-Impossible Flow (PIF) algorithm starts...")
+        error = abs(m_impossible-m_possible)/m_possible
+        tol = 1e-6
+        while error > tol:
+            pif_iterations += 1  
+            raw_solution = scipy.integrate.solve_ivp(
+                lambda t, y: odefun(y)[0],
+                [0, 1],
+                [0.00, pressure_in, u_possible, enthalpy_in],
+                # t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+                method="RK45",
+                rtol=1e-9,
+                atol=1e-9,
+                events=[stop_at_zero]
+            )
+            solution = postprocess_ode_autonomous(raw_solution.t, raw_solution.y, odefun)
+            
+            if raw_solution.t_events[0].size > 0:
+                m_impossible = m_guess
+            else:
+                m_possible = m_guess
+
+            m_guess = (m_impossible+m_possible) / 2
+            u_guess = m_guess / (density_in * area_in)  
+            error = abs(m_impossible-m_possible)/m_possible
+            print(m_impossible)
+            print(m_possible)
+
+        flow_rate = u_guess*area_in*density_in
+
+
+        # Calculate the solution with the last possible flow rate calculated
+        u_possible = m_possible/(density_in * area_in)
+        possible_solution = scipy.integrate.solve_ivp(
+            lambda t, y: odefun(y)[0],
+            [0, 1],
+            [0, pressure_in, u_possible, enthalpy_in],
+            # t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+            method="RK45",
+            rtol=1e-9,
+            atol=1e-9,
+            events=[stop_at_length, stop_at_zero]
+        )     
+        possible_solution = postprocess_ode_autonomous(possible_solution.t, possible_solution.y, odefun)
+        
+        # # Calculate the solution with the last impossible flow rate calculated
+        # u_impossible = m_impossible/(density_in * area_in)
+        # impossible_solution = scipy.integrate.solve_ivp(
+        #     lambda t, y: odefun(y)[0],
+        #     [0, 1],
+        #     [0, u_impossible, density_in, pressure_in],
+        #     t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+        #     method="RK45",
+        #     rtol=1e-9,
+        #     atol=1e-9,
+        #     events=[stop_at_length, stop_at_zero_det]
+        # ) 
+        # impossible_solution = postprocess_ode_autonomous(impossible_solution.t, impossible_solution.y, odefun) 
+
+        # # Calculate the solution with u_guess
+        # u_avg = (m_possible+m_impossible)/(2*density_in * area_in)
+        # solution = scipy.integrate.solve_ivp(
+        #     lambda t, y: odefun(y)[0],
+        #     [0, 1],
+        #     [0, u_avg, density_in, pressure_in],
+        #     t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+        #     method="Radau",
+        #     rtol=1e-9,
+        #     atol=1e-9,
+        #     events=[stop_at_length, stop_at_zero_det]
+        # ) 
+        # solution = postprocess_ode_autonomous(solution.t, solution.y, odefun) 
+
+        # mass_flow = solution["mass_flow"][0]
+        # density = solution["density"][-1]
+        # x = convergent_length*1.00001
+        # area, _, _, _ = get_linear_convergent_divergent(x, 
+        #                                                 convergent_length=convergent_length,
+        #                                                 divergent_length=divergent_length,
+        #                                                 radius_in=radius_in,
+        #                                                 radius_out=radius_out,
+        #                                                 radius_throat=radius_throat,
+        #                                                 width=width,
+        #                                                 type=nozzle_type)
+        # velocity = mass_flow/(density*area)
+
+        # supersonic_solution = scipy.integrate.solve_ivp(
+        #     lambda t, y: odefun(y)[0],
+        #     [1, 0], # Inverting dummy variable limits so you so not go backward at the singularity (all the determinants<0)
+        #     [x,
+        #      velocity, 
+        #      solution["density"][-1], 
+        #      solution["pressure"][-1]],
+        #     t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+        #     method="RK45",
+        #     rtol=1e-9,
+        #     atol=1e-9,
+        #     events=[stop_at_length, stop_at_zero]
+        # ) 
+        # supersonic_solution = postprocess_ode_autonomous(supersonic_solution.t, supersonic_solution.y, odefun) 
+        # print("rate out", supersonic_solution["mass_flow"][-1])
+                
+        supersonic_solution = 0
+        impossible_solution = 0
+        solution = 0
+        flow_rate = 0
+        pif_iterations = 0
+
+    else:
+        pif_iterations = None
+        solution = scipy.integrate.solve_ivp(
+        lambda t, y: odefun(t, y)[0],
+        [0.0, total_length],
+        [velocity_in, density_in, pressure_in],
+        t_eval=np.linspace(0, total_length, number_of_points) if number_of_points else None,
+        method="Radau",
+        rtol=1e-9,
+        atol=1e-9,
+        )
+        solution = postprocess_ode(solution.t, solution.y, odefun)
+
+        flow_rate = velocity_in*density_in*area_in
+ 
+
+    return supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations
