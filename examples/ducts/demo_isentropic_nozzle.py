@@ -1,27 +1,27 @@
-import functions as functions_backup
+from nozzlex.duct_modeling import functions
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 # Validate model for isentropic flow in converging nozzle
 fluid_name = "nitrogen"
-fluid = functions_backup.Fluid(fluid_name)
+fluid = functions.Fluid(fluid_name)
 T_in = 300
 p_in = 101325
 mach_in = 0.3
 length = 1.00
 diameter_in = 0.01
 roughness = 0.00
-state_in = fluid.set_state(functions_backup.PT_INPUTS, p_in, T_in)
+state_in = fluid.set_state(functions.PT_INPUTS, p_in, T_in)
 v_in = mach_in * fluid.a
-critical_area_ratio = functions_backup.get_critical_area_ratio_isentropic(
+critical_area_ratio = functions.get_critical_area_ratio_isentropic(
     mach_in, state_in.gamma
 )
 area_ratio = 1.001 * 1 / critical_area_ratio
 
 
 # Calculate solution
-solution = functions_backup.pipeline_steady_state_1D(
+solution = functions.pipeline_steady_state_1D(
     fluid_name=fluid_name,
     pressure_in=p_in,
     temperature_in=T_in,
@@ -38,7 +38,7 @@ solution = functions_backup.pipeline_steady_state_1D(
 
 
 # Plot evolution of flow variables
-functions_backup.set_plot_options()
+functions.set_plot_options()
 figure, ax = plt.subplots(figsize=(6.0, 4.8))
 ax.set_xlabel("Distance along pipe [m]")
 ax.set_ylabel("Normalized flow variables")

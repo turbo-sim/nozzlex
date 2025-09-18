@@ -1,3 +1,8 @@
+import os
+os.environ["JAX_TRACEBACK_FILTERING"] = "off"
+
+
+
 import time
 import jax
 import numpy as np
@@ -12,7 +17,7 @@ from matplotlib import gridspec
 
 jxp.set_plot_options(grid=False)
 
-from jaxprop.components import (
+from nozzlex.functions import (
     nozzle_single_phase_autonomous,
     symmetric_nozzle_geometry,
     NozzleParams,
@@ -93,6 +98,7 @@ def nozzle_single_phase(
         adjoint=adjoint,
         # event=event,  # No need to check event this time
         max_steps=20_000,
+
     )
 
     return sol_dense
@@ -113,6 +119,32 @@ def eval_end_of_domain_event(t, y, args, **kwargs):
     L = params_model.length
     return jnp.minimum(x, L - x)
 
+
+# JAX-compatible cubic Hermite interpolation
+def jax_cubic_spline(x, x_vals, y_vals):
+    """
+    Piecewise cubic Hermite spline approximation (JAX-compatible)
+    """
+    # Find interval indices (clip to valid range)
+    idx = jnp.clip(jnp.searchsorted(x_vals, x) - 1, 0, len(x_vals)-2)
+    
+    x0 = x_vals[idx]
+    x1 = x_vals[idx+1]
+    y0 = y_vals[idx]
+    y1 = y_vals[idx+1]
+    
+    # Linear slope (simple Hermite approximation)
+    m = (y1 - y0) / (x1 - x0 + 1e-12)  # avoid div by zero
+    t = (x - x0) / (x1 - x0 + 1e-12)
+    
+    # Cubic Hermite polynomial: h00 = 2t^3 - 3t^2 + 1, h10 = t^3 - 2t^2 + t
+    h00 = 2*t**3 - 3*t**2 + 1
+    h10 = t**3 - 2*t**2 + t
+    
+    return h00*y0 + (x1 - x0)*h10*m + (1 - h00)*y1
+
+def spline_func(x, args=None):
+    return jnp.interp(x, x_vals, y_vals)
 
 # -----------------------------------------------------------------------------
 # Converging-diverging nozzle example
@@ -141,13 +173,13 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Running inlet Mach number sensitivity analysis")
     print("-" * 60)
-    input_array = jnp.asarray([0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50])
-    # input_array = np.linspace(0.15, 0.4, 25)
+    # input_array = jnp.asarray([0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50])
+    input_array = np.linspace(0.15, 0.4, 5)
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, Ma in enumerate(input_array):
         t0 = time.perf_counter()
-        params_model = replace_param(params_model, "Ma_in", Ma)
+        params_model = replace_param(params_model, "Ma_in", Ma) 
         sol = nozzle_single_phase(params_model, params_solver)
         print(
             f"Ma_in = {Ma:0.2f} | Solution time: {(time.perf_counter() - t0) * 1e3:7.3f} ms"
@@ -179,11 +211,10 @@ if __name__ == "__main__":
     # axs[0].legend(loc="lower right", fontsize=7)
 
     # --- row 2: Mach number ---
-    max_mach = np.zeros(len(input_array))
+    max_mach = jnp.zeros(len(input_array))
 
     axs[1].set_ylabel("Mach number (-)")
     for i, (color, val, sol) in enumerate(zip(colors, input_array, solution_list)):
-        max_mach[i] = max(sol.ys["Ma"])
         axs[1].plot(sol.ys["x"], sol.ys["Ma"], color=color)
 
     # --- row 3: nozzle geometry ---
@@ -199,7 +230,12 @@ if __name__ == "__main__":
 
     # Plotting the function R(Ma_in) = max(Mach) - 1 
     fig = plt.figure(figsize=(6, 5))
-    plt.plot(input_array, (1 - max_mach), "k") 
+    x_vals = input_array
+    y_vals = (1 - max_mach)
+    x_plot = jnp.linspace(x_vals[0], x_vals[-1], 200)
+    y_plot = jax_cubic_spline(x_plot, x_vals, y_vals)
+ 
+    plt.plot(x_plot, y_plot, "k")
     for i, (color, val, sol) in enumerate(zip(colors, input_array, solution_list)):
         plt.plot(input_array[i], (1 - max_mach[i]), marker="o", markerfacecolor=color, markeredgecolor=color, label=rf"$p_\mathrm{{in}}/p_0 = {val:0.3f}$",)   
 
@@ -207,6 +243,44 @@ if __name__ == "__main__":
     plt.ylabel("1 - max(Mach)")
     # plt.legend(loc="best", fontsize=7)
     fig.tight_layout(pad=1)
+
+    solvers = {
+        "Bisection": optx.Bisection(rtol=1e-6, atol=1e-6),
+        "Newton": optx.Newton(rtol=1e-6, atol=1e-6),
+        "Chord": optx.Chord(rtol=1e-6, atol=1e-6),
+    }
+
+    lower = float(input_array[0])
+    upper = float(input_array[-1])
+    x0_initial = 0.5
+
+    def critical_mach_residual(Mach_in, params_model):
+        params_model = replace_param(params_model, "Ma_in", Mach_in)
+        sol = nozzle_single_phase(params_model, params_solver)
+        max_mach = jnp.max(sol.ys["Ma"])
+        return max_mach - 1.
+        # return jnp.min(sol.ys["D"])
+
+
+    for name, solver in solvers.items():
+        print(f"\n=== {name} solver ===")
+        try:
+            sol = optx.root_find(
+                critical_mach_residual,
+                solver,
+                x0_initial,
+                args=params_model,
+                throw=False,
+                options={"lower": lower, "upper": upper},
+                # max_steps=20,
+            )
+            print(f"Success: {sol.result == optx.RESULTS.successful}")
+            print(f"Root: {sol.value:0.6e}")
+            print(f"Residual: {float(critical_mach_residual(sol.value, params_model)):.6e}")
+            print(f"Steps: {sol.stats["num_steps"]}")
+        except Exception as e:
+            print(f"{name} solver failed: {e}")
+
 
     # Show figures
     plt.show()

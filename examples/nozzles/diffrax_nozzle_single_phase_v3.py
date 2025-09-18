@@ -8,6 +8,9 @@ import jaxprop as jxp
 import matplotlib.pyplot as plt
 
 from matplotlib import gridspec
+
+jxp.set_plot_options(grid=False)
+
 from jaxprop.components import (
     nozzle_single_phase_core,
     symmetric_nozzle_geometry,
@@ -18,8 +21,6 @@ from jaxprop.components import (
     solve_nozzle_model_collocation,
     initialize_flowfield,
 )
-
-jxp.set_plot_options(grid=False)
 
 
 # v1 solves the ode system using the space marching in non-autonomous form

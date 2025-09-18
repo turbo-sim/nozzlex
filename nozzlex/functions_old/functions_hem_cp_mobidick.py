@@ -2,14 +2,12 @@ import scipy.linalg
 import scipy.integrate
 import numpy as np
 import matplotlib as mpl
-import matplotlib.pyplot as plt
-import perfect_gas_prop.perfect_gas_prop as perfect_gas_prop 
-import real_gas_prop.real_gas_prop as rg
+import barotropy as bpy
 from cycler import cycler
 import numpy as np
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
-from SmoothWallNozzleGeometry import SmoothWallNozzleGeometry
+from .SmoothWallNozzleGeometry import SmoothWallNozzleGeometry
 
 
 COLORS_PYTHON = [
@@ -437,7 +435,7 @@ def pipeline_steady_state_1D(
             "Check input settins for the velocity."
         )
     
-    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -768,7 +766,7 @@ def pipeline_steady_state_1D_old_matrix(
             "Check input settins for the velocity."
         )
     
-    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = bpy.Fluid(fluid_name, backend="HEOS")
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -1095,7 +1093,7 @@ def pipeline_steady_state_1D_autonomous(
             "Check input settins for the velocity."
         )
     
-    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -1450,7 +1448,7 @@ def pipeline_steady_state_1D_autonomous_deriv(
             "Check input settins for the velocity."
         )
     
-    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length

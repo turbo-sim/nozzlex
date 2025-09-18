@@ -1,4 +1,4 @@
-import functions as functions
+from nozzlex.duct_modeling import functions
 import numpy as np
 import matplotlib.pyplot as plt
 

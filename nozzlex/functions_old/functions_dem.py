@@ -2,12 +2,8 @@ import scipy.linalg
 import scipy.integrate
 import numpy as np
 import matplotlib as mpl
-import matplotlib.pyplot as plt
-import perfect_gas_prop.perfect_gas_prop as perfect_gas_prop 
-import real_gas_prop.real_gas_prop as rg
 from cycler import cycler
 import numpy as np
-import warnings
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
 import barotropy as bpy

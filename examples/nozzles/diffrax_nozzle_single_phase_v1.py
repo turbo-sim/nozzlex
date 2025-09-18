@@ -8,14 +8,14 @@ import jax.numpy as jnp
 import diffrax as dfx
 import equinox as eqx
 import optimistix as optx
-import jaxprop as jxp
 import matplotlib.pyplot as plt
+import jaxprop as jxp
 
 from matplotlib import gridspec
 
 jxp.set_plot_options(grid=False)
 
-from jaxprop.components import (
+from nozzlex.functions import (
     nozzle_single_phase_core,
     symmetric_nozzle_geometry,
     NozzleParams,
