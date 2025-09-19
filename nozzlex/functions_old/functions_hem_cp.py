@@ -1,14 +1,13 @@
 import scipy.linalg
 import scipy.integrate
 import numpy as np
+import barotropy as bpy
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import barotropy as bpy
 from cycler import cycler
 import numpy as np
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
-from .SmoothWallNozzleGeometry import SmoothWallNozzleGeometry
 
 
 COLORS_PYTHON = [
@@ -436,7 +435,7 @@ def pipeline_steady_state_1D(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS")
+    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -455,7 +454,7 @@ def pipeline_steady_state_1D(
     elif mach_in is not None:
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
-        mach_impossible = 0.1
+        mach_impossible = 0.2
         mach_possible = 0.0000000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
@@ -477,7 +476,7 @@ def pipeline_steady_state_1D(
         try:
 
             # Thermodynamic state from perfect gas properties
-            state = fluid.set_state(HmassP_INPUTS, h, p)
+            state = fluid.get_state(HmassP_INPUTS, h, p)
             rho = state["rho"]
             viscosity = state["mu"]
             drho_dP = state["drho_dP"]
@@ -732,7 +731,7 @@ def pipeline_steady_state_1D_old_matrix(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS")
+    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -756,57 +755,29 @@ def pipeline_steady_state_1D_old_matrix(
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        m_possible = 19
-        m_impossible = 19
+        m_possible = 0.025
+        m_impossible = 0.025
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
     # Initialize out_list to store all the state outputs
     out_list = []
-
-    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\space_marching\Super_Moby_Dick_Water_Nozzle.csv")
-    SuperMobiDick.discretize_geometry() 
-    # SuperMobiDick.visualize_geometry()
-    SuperMobiDick.calculate_inclination_angles()
-    SuperMobiDick.compute_circumferential_areas()
-    pressure_gradient_areas = SuperMobiDick.get_pressure_gradient_areas()
-    shear_stress_areas = SuperMobiDick.get_shear_stress_areas() 
-    cross_sectional_areas = SuperMobiDick.get_sectional_areas()
-
-    sectional_positions = SuperMobiDick.get_sectional_positions()
-    sectional_radii = SuperMobiDick.get_sectional_heights()
     
     # Define the ODE system
     def odefun(t, y):
         x = t  # distance
-        v, rho, p = y  # velocity, density, pressure
-    
+        v, rho, p = y  # velocity, density, pressure    
 
         try:
 
             # Thermodynamic state from perfect gas properties
             state = fluid.set_state(DmassP_INPUTS, rho, p)
 
-            # # Calculate area and geometry properties for convergent-divergent nozzles
-            # area, area_slope, perimeter, radius = get_linear_convergent_divergent(
-            #     length=x, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
-            #     radius_out=radius_out, width=width, type=nozzle_type)
-            # diameter = radius*2
-
-            # Interpolate geometry-dependent parameters
-            area = np.interp(
-                x, sectional_positions,
-                cross_sectional_areas
-            )
-            dA_dz = (np.interp(
-                x + 1e-3, sectional_positions,
-                cross_sectional_areas
-            ) - area) / 1e-3  
-            height = np.interp(
-                x, sectional_positions,
-                sectional_radii
-            )  
-            p_wall = 2 * np.pi * height  # Wetted perimeter for circular cross-section
+            # Calculate area and geometry properties for convergent-divergent nozzles
+            area, area_slope, perimeter, radius = get_linear_convergent_divergent(
+                length=x, convergent_length=convergent_length, divergent_length=divergent_length, radius_in=radius_in, radius_throat=radius_throat,
+                radius_out=radius_out, width=width, type=nozzle_type)
+            diameter = radius*2
 
             # Wall friction calculations
             stress_wall, friction_factor, reynolds = get_wall_friction(
@@ -814,7 +785,7 @@ def pipeline_steady_state_1D_old_matrix(
                 density=rho,
                 viscosity=state["mu"],
                 roughness=roughness,
-                diameter=height,
+                diameter=diameter,
             )
             if not include_friction:
                 stress_wall = 0.0
@@ -850,9 +821,9 @@ def pipeline_steady_state_1D_old_matrix(
             # G = 0
             b = np.asarray(
                 [
-                    -rho * v / area * dA_dz,
-                    -p_wall / area * stress_wall,
-                    p_wall / area * G / v * (stress_wall * v),
+                    -rho * v / area * area_slope,
+                    -perimeter / area * stress_wall,
+                    perimeter / area * G / v * (stress_wall * v),
                 ]
             )
 
@@ -875,9 +846,9 @@ def pipeline_steady_state_1D_old_matrix(
                 "mach_number": v / state["a"],
                 "mass_flow": v * rho * area,
                 "area": area,
-                "area_slope": dA_dz,
-                "perimeter": p_wall,
-                "diameter": height,
+                "area_slope": area_slope,
+                "perimeter": perimeter,
+                "diameter": diameter,
                 "stress_wall": stress_wall,
                 "friction_factor": friction_factor,
                 "reynolds": reynolds,
@@ -1057,7 +1028,7 @@ def pipeline_steady_state_1D_autonomous(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS")
+    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -1095,7 +1066,7 @@ def pipeline_steady_state_1D_autonomous(
 
         try:
             # Thermodynamic state from perfect gas properties
-            state = fluid.set_state(DmassP_INPUTS, rho, p)
+            state = fluid.get_state(DmassP_INPUTS, rho, p)
 
             # Calculate area and geometry properties for convergent-divergent nozzles
             area, area_slope, perimeter, radius = get_linear_convergent_divergent(
@@ -1154,10 +1125,10 @@ def pipeline_steady_state_1D_autonomous(
             det_N1 = det(M1)
             det_N2 = det(M2)
             det_N3 = det(M3)
-            # print("det 1", det_M)
-            # print("det 2", det_M1)
-            # print("det 3", det_M2)
-            # print("det 4", det_M3)
+            # print("det 1", det_D)
+            # print("det 2", det_N1)
+            # print("det 3", det_N2)
+            # print("det 4", det_N3)
             # print(" ")
         
             dy = [det_D, det_N1, det_N2, det_N3]
@@ -1169,6 +1140,7 @@ def pipeline_steady_state_1D_autonomous(
                 "density": rho,
                 "pressure": p,
                 "temperature": state["T"],
+                "quality": state["Q"],
                 "speed_of_sound": state["a"],
                 "viscosity": state["mu"],
                 "enthalpy": state["h"],
@@ -1197,7 +1169,7 @@ def pipeline_steady_state_1D_autonomous(
             return dy, out
         
         except Exception as e:
-            # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
             return [np.nan, np.nan, np.nan, np.nan]  # forces integrator to stop
 
     # This function avoid to keep solving for the Impossible Flow when the matrix
@@ -1238,7 +1210,7 @@ def pipeline_steady_state_1D_autonomous(
                 [0, 1],
                 [0, u_guess, density_in, pressure_in],
                 t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
-                method="Radau",
+                method="RK45",
                 rtol=1e-9,
                 atol=1e-9,
                 events=[stop_at_length, stop_at_zero_det]
@@ -1265,7 +1237,7 @@ def pipeline_steady_state_1D_autonomous(
             lambda t, y: odefun(y)[0],
             [0, 1],
             [0, u_possible, density_in, pressure_in],
-            t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+            # t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="Radau",
             rtol=1e-9,
             atol=1e-9,

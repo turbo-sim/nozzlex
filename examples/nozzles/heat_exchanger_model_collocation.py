@@ -12,7 +12,7 @@ from typing import Any, Callable
 from jaxprop.perfect_gas import get_props
 
 
-from examples.jaxprop.nozzle_model_solver import (
+from nozzlex.functions.nozzle_model_solver import (
     nozzle_single_phase_core,
     NozzleParams,
     replace_param,

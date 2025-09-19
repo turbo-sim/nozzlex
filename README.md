@@ -9,8 +9,9 @@ Commands to clone repository, create Conda environment, and install all required
 git clone https://github.com/AndCiof/nozzlex.git
 cd nozzlex
 conda env create -f environment.yaml
-conda activate nozzlex
+conda activate nozzlex_env
 poetry install
+pip install barotropy # There are some conflicting package, so far it is better to do like this
 ```
 
 

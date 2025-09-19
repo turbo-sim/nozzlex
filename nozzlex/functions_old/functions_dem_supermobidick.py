@@ -8,7 +8,8 @@ import numpy as np
 import warnings
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
-import barotropy as bpy
+# import barotropy as bpy
+import jaxprop as jxp
 import pandas as pd
 import os
 from .SmoothWallNozzleGeometry import SmoothWallNozzleGeometry
@@ -486,8 +487,8 @@ def pipeline_steady_state_1D(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS")
-    state_in = fluid.get_state(bpy.PT_INPUTS, pressure_in, temperature_in)
+    fluid = jxp.Fluid(fluid_name, backend="HEOS")
+    state_in = fluid.get_state(jxp.PT_INPUTS, pressure_in, temperature_in)
     p_cr = fluid.critical_point.p
     s_meta = state_in.s  # The metastable phase is assumed to follow an isentropi expansion
     rhoT_guess = [state_in["rho"], state_in["T"]]
@@ -670,7 +671,7 @@ def pipeline_steady_state_1D(
                 heat_in = 0
 
             # Saturated liquid properties
-            state_L = fluid.get_state(bpy.fluid_properties.PQ_INPUTS, p, 0.00)
+            state_L = fluid.get_state(jxp.PQ_INPUTS, p, 0.00)
             rho_L = state_L.d
             h_L = state_L.h
             temp_L = CP.AbstractState("HEOS", fluid_name)
@@ -680,7 +681,7 @@ def pipeline_steady_state_1D(
             dhdp_L = temp_L.first_saturation_deriv(CP.iHmass, CP.iP)
 
             # Saturated vapor properties(bpy.fluid_properties.PT_INPUTS, p_stagnation, T_stagnation)
-            state_V = fluid.get_state(bpy.fluid_properties.PQ_INPUTS, p, 1.00)
+            state_V = fluid.get_state(jxp.PQ_INPUTS, p, 1.00)
             rho_V = state_V.d
             h_V = state_V.h
             T = state_V.T
@@ -705,7 +706,7 @@ def pipeline_steady_state_1D(
             h_meta = meta_state["h"]
             # pressure_meta = meta_state["p"]
 
-            state_meta = fluid.get_state(bpy.fluid_properties.QT_INPUTS, 0.00, T_meta)
+            state_meta = fluid.get_state(jxp.QT_INPUTS, 0.00, T_meta)
             p_sat_T_LM = state_meta.p
 
             spec_vol_mix = x/rho_V + (y-x)/rho_L + (1-y)/rho_meta
@@ -713,7 +714,7 @@ def pipeline_steady_state_1D(
 
             rho_m = 1/spec_vol_mix
 
-            state = fluid.get_state(bpy.fluid_properties.DmassP_INPUTS, rho_m, p)
+            state = fluid.get_state(jxp.DmassP_INPUTS, rho_m, p)
             
             # Coefficient matrix M for ODE system for DEM 
             M = np.asarray(
@@ -988,8 +989,8 @@ def pipeline_steady_state_1D_autonomous(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS")
-    state_in = fluid.get_state(bpy.PT_INPUTS, pressure_in, temperature_in)
+    fluid = jxp.Fluid(fluid_name, backend="HEOS")
+    state_in = fluid.get_state(jxp.PT_INPUTS, pressure_in, temperature_in)
     p_cr = fluid.critical_point.p
     s_meta = state_in.s  # The metastable phase is assumed to follow an isentropi expansion
     rhoT_guess = [state_in["rho"], state_in["T"]]
@@ -1077,7 +1078,7 @@ def pipeline_steady_state_1D_autonomous(
                 heat_in = 0
 
             # Saturated liquid properties
-            state_L = fluid.get_state(bpy.fluid_properties.PQ_INPUTS, p, 0.00)
+            state_L = fluid.get_state(jxp.PQ_INPUTS, p, 0.00)
             rho_L = state_L.d
             h_L = state_L.h
             temp_L = CP.AbstractState("HEOS", fluid_name)
@@ -1087,7 +1088,7 @@ def pipeline_steady_state_1D_autonomous(
             dhdp_L = temp_L.first_saturation_deriv(CP.iHmass, CP.iP)
             
             # Saturated vapor properties(bpy.fluid_properties.PT_INPUTS, p_stagnation, T_stagnation)
-            state_V = fluid.get_state(bpy.fluid_properties.PQ_INPUTS, p, 1.00)
+            state_V = fluid.get_state(jxp.PQ_INPUTS, p, 1.00)
             rho_V = state_V.d
             h_V = state_V.h
             T = state_L.T
@@ -1112,7 +1113,7 @@ def pipeline_steady_state_1D_autonomous(
             h_meta = meta_state["h"]
             # pressure_meta = meta_state["p"]
 
-            state_meta = fluid.get_state(bpy.fluid_properties.QT_INPUTS, 0.00, T_meta)
+            state_meta = fluid.get_state(jxp.QT_INPUTS, 0.00, T_meta)
             p_sat_T_LM = state_meta.p
 
             spec_vol_mix = x/rho_V + (y-x)/rho_L + (1-y)/rho_meta
@@ -1120,7 +1121,7 @@ def pipeline_steady_state_1D_autonomous(
 
             rho_m = 1/spec_vol_mix
 
-            state = fluid.get_state(bpy.fluid_properties.DmassP_INPUTS, rho_m, p)
+            state = fluid.get_state(jxp.DmassP_INPUTS, rho_m, p)
             
             # Coefficient matrix M for ODE system for DEM 
             M = np.asarray(

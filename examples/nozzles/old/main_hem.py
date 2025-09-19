@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
-from perfect_gas_prop import perfect_gas_prop
-from real_gas_prop import real_gas_prop
+import nozzlex as nx
+# import jaxprop as jx
+import barotropy as bpy
 import numpy as np
 import yaml
 import time
@@ -15,16 +16,14 @@ import barotropy as bpy # Only used to plot the Ts and Ph diagrams, not for eval
 with open("settings.yaml", 'r') as file:
     case_data = yaml.safe_load(file)
 
-import functions_hem_cp as function
-
-# if case_data["fluid"]["look_up_table"] is False:
-#     import functions_hem_cp as function
-# else:
-#     import functions_hem_lut as function
+if case_data["fluid"]["look_up_table"] is False:
+    from nozzlex.functions_old import functions_hem_cp as function
+else:
+    from nozzlex.functions_old import functions_hem_lut as function
 
 # Upload fluid parameters from yaml file
 fluid_name = case_data["fluid"]["fluid_name"]
-fluid = real_gas_prop.Fluid(fluid_name)
+fluid = bpy.Fluid(fluid_name)
 
 
 # Upload nozzle parameters from yaml file
@@ -49,7 +48,7 @@ critical_flow = case_data["boundary_conditions"]["critical_flow"]
 # === 2. PERFORM SIMULATION                        ===
 # ====================================================
 
-state_in = fluid.set_state(real_gas_prop.PT_INPUTS, p_in, T_in)
+state_in = fluid.get_state(bpy.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
 
