@@ -35,8 +35,8 @@ print("CoolProp drhodh:", state["drho_dh"])
 print("")
 
 # Considering the variation of quality when perturbing
-dp = 1e-1 # Pressure Perturbation
-dh = 1e-1 # Enthalpy perturbation
+dp = 1e-9 * p # Pressure Perturbation
+dh = 1e-6 * h # Enthalpy perturbation
 
 state_dp = fluid.set_state(rg.HmassP_INPUTS, h_mix, p+dp)
 x_dp = state_dp["Q"]

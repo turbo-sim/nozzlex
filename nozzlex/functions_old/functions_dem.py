@@ -9,6 +9,7 @@ import CoolProp.CoolProp as CP
 import jaxprop as jxp
 import pandas as pd
 import os
+import barotropy as bpy
 
 
 
@@ -424,11 +425,12 @@ def get_friction_factor_haaland(reynolds, roughness, diameter):
 
 def dem_term_angielczyk_1(perimeter, p, y, p_sat_T_LM, p_cr, area):
 
-    ## Accoding to Angielczyk
+    ## Angielczyk tuned the correlation for water with this coefficients for CO2
     C_1 = 5.17
     C_2 = 0.87
     C_3 = 0.25
 
+    ## Accoding to Angielczyk, correlation originally developed for water!!
     # C_1 = 0.008390
     # C_2 = 0.633691
     # C_3 = 0.228127
@@ -441,7 +443,7 @@ def dem_term_angielczyk_1(perimeter, p, y, p_sat_T_LM, p_cr, area):
 
 def dem_term_angielczyk_2(p, y, p_sat_T_LM, p_cr, dAdz_div, dAdz_conv):
 
-    ## Correlation used by Angielczyk
+    ## New correlation developed by Angielczyk for CO2
     C_1 = 38
     C_2 = 1.291e-31
     C_3 = 75.28
@@ -667,7 +669,7 @@ def pipeline_steady_state_1D(
                 heat_in = 0
 
             # Saturated liquid properties
-            state_L = fluid.get_state(jxp.PQ_INPUTS, p, 0.00)
+            state_L = fluid.get_state(bpy.PQ_INPUTS, p, 0.00)
             rho_L = state_L.d
             h_L = state_L.h
             temp_L = CP.AbstractState("HEOS", fluid_name)
@@ -677,7 +679,7 @@ def pipeline_steady_state_1D(
             dhdp_L = temp_L.first_saturation_deriv(CP.iHmass, CP.iP)
 
             # Saturated vapor properties(bpy.fluid_properties.PT_INPUTS, p_stagnation, T_stagnation)
-            state_V = fluid.get_state(jxp.PQ_INPUTS, p, 1.00)
+            state_V = fluid.get_state(bpy.PQ_INPUTS, p, 1.00)
             rho_V = state_V.d
             h_V = state_V.h
             T = state_V.T
@@ -702,7 +704,7 @@ def pipeline_steady_state_1D(
             h_meta = meta_state["h"]
             # pressure_meta = meta_state["p"]
 
-            state_meta = fluid.get_state(jxp.QT_INPUTS, 0.00, T_meta)
+            state_meta = fluid.get_state(bpy.QT_INPUTS, 0.00, T_meta)
             p_sat_T_LM = state_meta.p
 
             spec_vol_mix = x/rho_V + (y-x)/rho_L + (1-y)/rho_meta
@@ -710,7 +712,7 @@ def pipeline_steady_state_1D(
 
             rho_m = 1/spec_vol_mix
 
-            state = fluid.get_state(jxp.DmassP_INPUTS, rho_m, p)
+            state = fluid.get_state(bpy.DmassP_INPUTS, rho_m, p)
             
             # Coefficient matrix M for ODE system for DEM 
             M = np.asarray(
@@ -777,7 +779,8 @@ def pipeline_steady_state_1D(
             return dy, out, flag
     
         except Exception as e:
-            # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            exit()
             return [np.nan, np.nan, np.nan, np.nan] 
         
     def stop_at_two_phase(t, y):
@@ -1014,8 +1017,8 @@ def pipeline_steady_state_1D_autonomous(
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        m_impossible = 0.031
-        m_possible = 0.031
+        # m_impossible = 0.031
+        # m_possible = 0.031
 
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)

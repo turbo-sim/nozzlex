@@ -7,7 +7,10 @@ from cycler import cycler
 import numpy as np
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
+
 from .SmoothWallNozzleGeometry import SmoothWallNozzleGeometry
+from . import real_gas_prop as rg
+
 
 
 COLORS_PYTHON = [
@@ -766,7 +769,8 @@ def pipeline_steady_state_1D_old_matrix(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS")
+
+    fluid = rg.Fluid(fluid_name, backend="HEOS")
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -777,6 +781,8 @@ def pipeline_steady_state_1D_old_matrix(
 
     # Calculate inlet density
     density_in = properties_in.rho
+    entropy_in = properties_in.s
+    total_enthalpy = properties_in.h
 
     # Calculate velocity based on specified parameter
     if mass_flow is not None:
@@ -790,15 +796,20 @@ def pipeline_steady_state_1D_old_matrix(
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        m_possible = 17
-        m_impossible = 17
+        m_possible = 19
+        m_impossible = 19
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
+    
+    enthalpy_in = total_enthalpy - 0.5*u_guess**2
+    state_in = fluid.set_state(HmassSmass_INPUTS, enthalpy_in, entropy_in)
+    pressure_in = state_in.p
+    density_in = state_in.rho
 
     # Initialize out_list to store all the state outputs
     out_list = []
 
-    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\space_marching\Super_Moby_Dick_Water_Nozzle.csv")
+    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\nozzlex\nozzlex\functions_old\Super_Moby_Dick_Water_Nozzle.csv")
     SuperMobiDick.discretize_geometry() 
     # SuperMobiDick.visualize_geometry()
     SuperMobiDick.calculate_inclination_angles()
@@ -978,10 +989,10 @@ def pipeline_steady_state_1D_old_matrix(
             lambda t, y: odefun(t, y)[0],
             [0.0, 0.463],
             [u_possible, density_in, pressure_in],
-            # t_eval=np.linspace(0, convergent_length, 500),
-            method="RK45",
-            rtol=1e-6,
-            atol=1e-6,
+            # t_eval=np.linspace(0, 0.463, 2000),
+            method="LSODA",
+            rtol=1e-9,
+            atol=1e-9,
         )     
         possible_solution = postprocess_ode(possible_solution.t, possible_solution.y, odefun)
 
@@ -1448,7 +1459,7 @@ def pipeline_steady_state_1D_autonomous_deriv(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -1473,15 +1484,15 @@ def pipeline_steady_state_1D_autonomous_deriv(
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        # m_possible = 10
-        # m_impossible = 10
+        m_possible = 18.5
+        m_impossible = 18.5
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
     # Initialize out_list to store all the state outputs
     out_list = []
 
-    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\space_marching\Super_Moby_Dick_Water_Nozzle.csv")
+    SuperMobiDick = SmoothWallNozzleGeometry(shape="circular", file_path=r"C:\Users\ancio\OneDrive - Danmarks Tekniske Universitet\Documents\python_scripts\nozzlex\nozzlex\functions_old\Super_Moby_Dick_Water_Nozzle.csv")
     SuperMobiDick.discretize_geometry() 
     # SuperMobiDick.visualize_geometry()
     SuperMobiDick.calculate_inclination_angles()
@@ -1535,9 +1546,9 @@ def pipeline_steady_state_1D_autonomous_deriv(
                 roughness=roughness,
                 diameter=2*height,
             )
-            # if not include_friction:
-            #     stress_wall = 0.0
-            #     friction_factor = 0.0
+            if not include_friction:
+                stress_wall = 0.0
+                friction_factor = 0.0
 
             # Heat transfer (if applicable)
             if include_heat_transfer:
@@ -1685,7 +1696,7 @@ def pipeline_steady_state_1D_autonomous_deriv(
         u_possible = m_possible/(density_in * area_in)
         possible_solution = scipy.integrate.solve_ivp(
             lambda t, y: odefun(y)[0],
-            [0, 1],
+            [1, 0],
             [0, pressure_in, u_possible, enthalpy_in],
             # t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
             method="RK45",

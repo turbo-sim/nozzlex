@@ -8,6 +8,7 @@ from cycler import cycler
 import numpy as np
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
+from . import real_gas_prop as rg
 
 
 COLORS_PYTHON = [
@@ -426,7 +427,7 @@ def pipeline_steady_state_1D(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -450,13 +451,13 @@ def pipeline_steady_state_1D(
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
         mach_impossible = 0.1
-        mach_possible = 0.00000000000001
+        mach_possible = 0.00000000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        # m_possible = 0.022911863096588353
-        # m_impossible = 0.02293763572099387
+        m_possible = 0.023
+        m_impossible = 0.023
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
@@ -467,6 +468,8 @@ def pipeline_steady_state_1D(
         x = t  # distance
         p, v, h, quality = y  # velocity, density, pressure
         flag = 0
+        if quality < 0:
+            quality = 1e-13
 
         try:
             # Calculate area and geometry properties for convergent-divergent nozzles
@@ -504,13 +507,13 @@ def pipeline_steady_state_1D(
 
                 vap = fluid.set_state(PQ_INPUTS, p, 1.00)
                 rho_vap = vap["rho"]
-                
+
                 source_term = HRM_source_term(rho=rho, x=quality, x_eq=quality_eq, rho_v=rho_vap,
                                     p_cr=fluid.critical_point.p, p_sat_sin=p_sat_sin, p=p) - (1/area)*(quality*rho*v*area_slope) 
 
-
                 # source_term = HRM_source_term_2(s_0=entropy_in, s_cr=fluid.critical_point.s, 
                 #                                 s_tr=fluid.triple_point_liquid.s, x=quality, x_eq=quality_eq, rho=rho)-(1/area)*(quality*rho*v*area_slope) 
+                
                 two_phase_flag = 1
 
                 if quality > quality_eq:
@@ -522,7 +525,7 @@ def pipeline_steady_state_1D(
                     [v * drho_dP,    rho,          v * drho_dh, 0.00],
                     [1,              rho * v,      0.00,        0.00],
                     [-v,             0.00,         rho * v,     0.00],
-                    [quality * v * drho_dP*two_phase_flag, quality * rho*two_phase_flag, quality * v * drho_dh*two_phase_flag, rho * v*two_phase_flag],
+                    [quality * v * drho_dP*two_phase_flag, quality * rho * two_phase_flag, quality * v * drho_dh * two_phase_flag, rho * v * two_phase_flag],
                 ]
             )
 
@@ -531,7 +534,7 @@ def pipeline_steady_state_1D(
                     -rho * v / area * area_slope,
                     -perimeter / area * stress_wall,
                     v * stress_wall * perimeter / area,
-                    source_term,
+                    source_term*two_phase_flag,
                 ]
             )
 
@@ -581,7 +584,7 @@ def pipeline_steady_state_1D(
             return dy, out
 
         except Exception as e:
-            # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
             return [np.nan, np.nan, np.nan, np.nan], None # forces integrator to stop
 
     def stop_at_singularity(t, y):
@@ -606,8 +609,8 @@ def pipeline_steady_state_1D(
                 [0.0, total_length],
                 [pressure_in, u_guess, enthalpy_in, 0.00],
                 method="RK45",
-                rtol=1e-9,
-                atol=1e-9,
+                rtol=1e-6,
+                atol=1e-6,
                 events=[stop_at_singularity]
             )
             solution = postprocess_ode(raw_solution.t, raw_solution.y, odefun)

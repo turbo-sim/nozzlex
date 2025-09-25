@@ -9,6 +9,9 @@ import numpy as np
 from scipy.linalg import det
 import CoolProp.CoolProp as CP
 
+from . import real_gas_prop as rg
+
+
 
 COLORS_PYTHON = [
     "#1f77b4",
@@ -435,7 +438,7 @@ def pipeline_steady_state_1D(
             "Check input settins for the velocity."
         )
     
-    fluid = bpy.Fluid(fluid_name, backend="HEOS", exceptions=True)
+    fluid = rg.Fluid(fluid_name, backend="HEOS", exceptions=True)
     
     # Define inlet area and length of the nozzle
     total_length = convergent_length+divergent_length
@@ -455,13 +458,13 @@ def pipeline_steady_state_1D(
         velocity_in = mach_in * properties_in["a"]
     elif critical_flow is True:
         mach_impossible = 0.2
-        mach_possible = 0.0000000001
+        mach_possible = 0.00000001
         u_impossible = mach_impossible*properties_in.a
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        # m_possible = 19
-        # m_impossible = 19
+        m_possible = 0.022
+        m_impossible = 0.026
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
@@ -476,7 +479,7 @@ def pipeline_steady_state_1D(
         try:
 
             # Thermodynamic state from perfect gas properties
-            state = fluid.get_state(HmassP_INPUTS, h, p)
+            state = fluid.set_state(HmassP_INPUTS, h, p)
             rho = state["rho"]
             viscosity = state["mu"]
             drho_dP = state["drho_dP"]
@@ -522,8 +525,8 @@ def pipeline_steady_state_1D(
             # If singularity detected
             flag = 0
 
-            # if determinant > 0:
-            #     flag = 1
+            if determinant > 0:
+                flag = 1
 
             if (1-1e-3) < v/state["a"] :
                 flag = 1
@@ -811,10 +814,12 @@ def pipeline_steady_state_1D_old_matrix(
 
             # If singularity detected¨
             flag = 0
+
             # if (1-1e-6) < v/state["a"] < (1+1e-6):
             #     flag = 1
-            # if determinant < 1e-6:
-            #     flag = 1
+
+            if determinant < 1e-6:
+                flag = 1
 
             # Right-hand side of the system
             G = state.isobaric_expansion_coefficient * state.a**2 / state.cp

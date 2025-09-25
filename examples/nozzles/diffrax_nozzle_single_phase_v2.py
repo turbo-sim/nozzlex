@@ -174,7 +174,7 @@ if __name__ == "__main__":
     print("Running inlet Mach number sensitivity analysis")
     print("-" * 60)
     # input_array = jnp.asarray([0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50])
-    input_array = np.linspace(0.15, 0.4, 5)
+    input_array = np.linspace(0.15, 0.8, 10)
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, Ma in enumerate(input_array):
@@ -210,9 +210,6 @@ if __name__ == "__main__":
         )
     # axs[0].legend(loc="lower right", fontsize=7)
 
-    # --- row 2: Mach number ---
-    max_mach = jnp.zeros(len(input_array))
-
     axs[1].set_ylabel("Mach number (-)")
     for i, (color, val, sol) in enumerate(zip(colors, input_array, solution_list)):
         axs[1].plot(sol.ys["x"], sol.ys["Ma"], color=color)
@@ -228,39 +225,22 @@ if __name__ == "__main__":
     axs[2].set_xlabel("Axial coordinate x (m)")
     fig.tight_layout(pad=1)
 
-    # Plotting the function R(Ma_in) = max(Mach) - 1 
-    fig = plt.figure(figsize=(6, 5))
-    x_vals = input_array
-    y_vals = (1 - max_mach)
-    x_plot = jnp.linspace(x_vals[0], x_vals[-1], 200)
-    y_plot = jax_cubic_spline(x_plot, x_vals, y_vals)
- 
-    plt.plot(x_plot, y_plot, "k")
-    for i, (color, val, sol) in enumerate(zip(colors, input_array, solution_list)):
-        plt.plot(input_array[i], (1 - max_mach[i]), marker="o", markerfacecolor=color, markeredgecolor=color, label=rf"$p_\mathrm{{in}}/p_0 = {val:0.3f}$",)   
-
-    plt.xlabel("Inlet Mach number")
-    plt.ylabel("1 - max(Mach)")
-    # plt.legend(loc="best", fontsize=7)
-    fig.tight_layout(pad=1)
+    def critical_mach_residual(Mach_in, params_model):
+        params_model = replace_param(params_model, "Ma_in", Mach_in)
+        sol = nozzle_single_phase(params_model, params_solver)
+        max_mach = jnp.max(sol.ys["Ma"])
+        return 1. - max_mach
+        # return jnp.min(sol.ys["D"])
 
     solvers = {
         "Bisection": optx.Bisection(rtol=1e-6, atol=1e-6),
-        "Newton": optx.Newton(rtol=1e-6, atol=1e-6),
-        "Chord": optx.Chord(rtol=1e-6, atol=1e-6),
+        # "Newton": optx.Newton(rtol=1e-6, atol=1e-6),
+        # "Chord": optx.Chord(rtol=1e-6, atol=1e-6),
     }
 
     lower = float(input_array[0])
     upper = float(input_array[-1])
     x0_initial = 0.5
-
-    def critical_mach_residual(Mach_in, params_model):
-        params_model = replace_param(params_model, "Ma_in", Mach_in)
-        sol = nozzle_single_phase(params_model, params_solver)
-        max_mach = jnp.max(sol.ys["Ma"])
-        return max_mach - 1.
-        # return jnp.min(sol.ys["D"])
-
 
     for name, solver in solvers.items():
         print(f"\n=== {name} solver ===")
@@ -281,6 +261,21 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"{name} solver failed: {e}")
 
+    # Plotting the function R(Ma_in) = max(Mach) - 1 
+    fig = plt.figure(figsize=(6, 5))
+    x_vals = input_array
+    y_vals = np.zeros(len(x_vals))
+
+    for i, (color, val, sol) in enumerate(zip(colors, input_array, solution_list)):
+        residual = critical_mach_residual(input_array[i], params_model)
+        plt.plot(input_array[i], residual, marker="o", markerfacecolor=color, markeredgecolor=color, label=rf"$p_\mathrm{{in}}/p_0 = {val:0.3f}$",)   
+        y_vals[i] = residual
+
+    plt.plot(x_vals, y_vals, color = "k") 
+    plt.xlabel("Inlet Mach number")
+    plt.ylabel("1 - max(Mach)")
+    # plt.legend(loc="best", fontsize=7)
+    fig.tight_layout(pad=1)
 
     # Show figures
     plt.show()

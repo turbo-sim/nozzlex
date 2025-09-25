@@ -1,12 +1,11 @@
 import matplotlib.pyplot as plt
-from perfect_gas_prop import perfect_gas_prop
-from real_gas_prop import real_gas_prop
 import numpy as np
 import yaml
 import time
 import os
 import shutil
 import barotropy as bpy # Only used to plot the Ts and Ph diagrams, not for evaluating properties during computation
+from nozzlex.functions_old import real_gas_prop
 
 
 # ====================================================
@@ -17,9 +16,9 @@ with open("settings_mobidick.yaml", 'r') as file:
     case_data = yaml.safe_load(file)
 
 if case_data["fluid"]["look_up_table"] is False:
-    import functions_hem_cp_mobidick as function
+    from nozzlex.functions_old import functions_hem_cp_mobidick as function
 else:
-    import functions_hem_lut as function
+    from nozzlex.functions_old import functions_hem_cp_mobidick as function
 
 # Upload fluid parameters from yaml file
 fluid_name = case_data["fluid"]["fluid_name"]
@@ -48,13 +47,13 @@ critical_flow = case_data["boundary_conditions"]["critical_flow"]
 # === 2. PERFORM SIMULATION                        ===
 # ====================================================
 
-state_in = fluid.set_state(real_gas_prop.PT_INPUTS, p_in, T_in)
+total_state_in = fluid.set_state(real_gas_prop.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
-_, possible_solution, _, _, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous_deriv(
-    fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
+_, possible_solution, _, _, flow_rate, pif_iterations = function.pipeline_steady_state_1D_old_matrix(
+    fluid_name=fluid_name, properties_in=total_state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
-    nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=True, include_heat_transfer=False)
+    nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=False, include_heat_transfer=False)
 
 # solution, solution_supersonic = function.pipeline_steady_state_1D_critical(
 #     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
@@ -272,21 +271,21 @@ ax3.plot(
 ax3.legend(loc="best")
 # figure.tight_layout(pad=1)
 
-figure, ax4 = plt.subplots(figsize=(6.0, 4.8))
-# Second subplot - Density
-ax4 = axs[1, 1]
-ax4.set_xlabel("Axis position [-]", fontsize=14)
-ax4.set_ylabel("Determinant [-]", fontsize=14)
-ax4.plot(
-    possible_solution["distance"],
-    possible_solution["determinant_D"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="equilibrium quality",
-)
+# figure, ax4 = plt.subplots(figsize=(6.0, 4.8))
+# # Second subplot - Density
+# ax4 = axs[1, 1]
+# ax4.set_xlabel("Axis position [-]", fontsize=14)
+# ax4.set_ylabel("Determinant [-]", fontsize=14)
+# ax4.plot(
+#     possible_solution["distance"],
+#     possible_solution["determinant_D"],
+#     linewidth=1.00,
+#     marker="o",
+#     markersize=3.5,
+#     markeredgewidth=1.00,
+#     markerfacecolor="w",
+#     label="equilibrium quality",
+# )
 # ax4.plot(
 #     supersonic_solution["distance"],
 #     supersonic_solution["entropy"],
@@ -307,36 +306,36 @@ ax4.plot(
 #     markerfacecolor="w",
 #     label="quality",
 # )
-ax4.legend(loc="best")
-plt.show()
-figure.tight_layout(pad=1)
-fig.tight_layout(pad=2)
+# ax4.legend(loc="best")
 # plt.show()
-plt.savefig(os.path.join("results", "properties.png"))
+# figure.tight_layout(pad=1)
+# fig.tight_layout(pad=2)
+# plt.show()
+# plt.savefig(os.path.join("results", "properties.png"))
 
 # ====================================================
 # === 5. SAVE PLOT T-s AND P-h DIAGRAMS            ===
 # ====================================================
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.0), gridspec_kw={"wspace": 0.25})
-ax1.set_xlabel("Entropy (J/kg/K)")
-ax1.set_ylabel("Temperature (K)")
-ax2.set_xlabel("Enthalpy (J/kg)")
-ax2.set_ylabel("Pressure (Pa)")
+# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.0), gridspec_kw={"wspace": 0.25})
+# ax1.set_xlabel("Entropy (J/kg/K)")
+# ax1.set_ylabel("Temperature (K)")
+# ax2.set_xlabel("Enthalpy (J/kg)")
+# ax2.set_ylabel("Pressure (Pa)")
 
-prop_x1, prop_y1 = "s","T"
-prop_x2, prop_y2 = "h", "p"
+# prop_x1, prop_y1 = "s","T"
+# prop_x2, prop_y2 = "h", "p"
 
-fluid = bpy.Fluid(name=fluid_name, backend="HEOS")
-fluid.plot_phase_diagram(
-    prop_x1,
-    prop_y1,
-    axes=ax1,
-    plot_critical_point=True,
-    plot_quality_isolines=True,
-    plot_pseudocritical_line=False,
-    plot_spinodal_line=True,
-)
+# fluid = bpy.Fluid(name=fluid_name, backend="HEOS")
+# fluid.plot_phase_diagram(
+#     prop_x1,
+#     prop_y1,
+#     axes=ax1,
+#     plot_critical_point=True,
+#     plot_quality_isolines=True,
+#     plot_pseudocritical_line=False,
+#     plot_spinodal_line=True,
+# )
 
 # ax1.plot(solution["entropy"], 
 #         solution["temperature"],
@@ -357,17 +356,17 @@ fluid.plot_phase_diagram(
 #         markerfacecolor="w",
 #         label="Divergent",
 #         )
-ax1.legend(loc="best")
+# ax1.legend(loc="best")
 
-fluid.plot_phase_diagram(
-    prop_x2,
-    prop_y2,
-    axes=ax2,
-    plot_critical_point=True,
-    plot_quality_isolines=True,
-    plot_pseudocritical_line=False,
-    plot_spinodal_line=False,
-)
+# fluid.plot_phase_diagram(
+#     prop_x2,
+#     prop_y2,
+#     axes=ax2,
+#     plot_critical_point=True,
+#     plot_quality_isolines=True,
+#     plot_pseudocritical_line=False,
+#     plot_spinodal_line=False,
+# )
 
 # ax2.plot(solution["enthalpy"], 
 #         solution["pressure"],
@@ -388,12 +387,12 @@ fluid.plot_phase_diagram(
 #         markerfacecolor="w",
 #         label="Divergent",
 #         )
-ax2.legend(loc="best")
+# ax2.legend(loc="best")
 
-fig.tight_layout(pad=2)
+# fig.tight_layout(pad=2)
 
-plt.savefig(os.path.join("results", "diagrams.png"))
-plt.show()
+# plt.savefig(os.path.join("results", "diagrams.png"))
+# plt.show()
 
 # ====================================================
 # === 6. SAVE PLOT NUMERICAL INTEGRATION ERROR     ===
@@ -402,31 +401,18 @@ plt.show()
 # The mass should always be conserved
 # The total enthalpy is conserved if the heat transfer is zero
 # The entropy is conserved if both heat transfer and friction are zero
-
-figure, ax = plt.subplots(figsize=(6.0, 4.8))
-m_error_sub = solution["mass_flow"] / solution["mass_flow"][0] - 1
-h_error_sub = solution["total_enthalpy"] / solution["total_enthalpy"][0] - 1
-s_error_sub = solution["entropy"] / solution["entropy"][0] - 1
+figure, ax = plt.subplots(figsize=(6.0, 5))
+m_error_sub = (possible_solution["mass_flow"] - possible_solution["mass_flow"][0])/ possible_solution["mass_flow"][0]
+h_error_sub = possible_solution["total_enthalpy"] / possible_solution["total_enthalpy"][0] - 1
+s_error_sub = possible_solution["entropy"] / possible_solution["entropy"][0] - 1
 ax.set_xlabel("Axis distance (m)")
 ax.set_ylabel("Integration error")
-ax.set_yscale("log")
-ax.plot(solution["distance"], np.abs(m_error_sub), label="Mass flow error")
-ax.plot(solution["distance"], np.abs(h_error_sub), label="Total enthalpy error")
-# ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
-m_error_sup = supersonic_solution["mass_flow"] / solution["mass_flow"][0] - 1
-h_error_sup = supersonic_solution["total_enthalpy"] / solution["total_enthalpy"][0] - 1
-s_error_sup = supersonic_solution["entropy"] / solution["entropy"][0] - 1
-ax.plot(supersonic_solution["distance"], np.abs(m_error_sup), label="Mass flow error")
-ax.plot(supersonic_solution["distance"], np.abs(h_error_sup), label="Total enthalpy error")
-# ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
+# ax.set_yscale("log")
+ax.plot(possible_solution["distance"], possible_solution["mass_flow"], "-o", label="Mass flow error")
+# ax.plot(possible_solution["distance"], np.abs(h_error_sub), "-o", label="Total enthalpy error")
+# ax.plot(possible_solution["distance"], np.abs(s_error_sub), "-o", label="Entropy error")
 ax.legend(loc="best")
-fig.tight_layout(pad=2)
-
-plt.savefig(os.path.join("results", "error.png"))
-
-# Copy yaml file in the result folder
-shutil.copyfile("settings.yaml", 
-                os.path.join("results", "settings.yaml"))
+fig.tight_layout(pad=3)
 
 
 plt.show()

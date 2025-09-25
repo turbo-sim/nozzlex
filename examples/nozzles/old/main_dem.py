@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
-from perfect_gas_prop import perfect_gas_prop
-from real_gas_prop import real_gas_prop
 import numpy as np
-import functions_dem as function
+import nozzlex.functions_old.functions_dem as function
 import yaml
 import time
 import os
@@ -57,9 +55,6 @@ possible_solution, impossible_solution, solution, flow_rate, pif_iterations = fu
 # Calculate the duration
 end_time = time.time()
 duration = end_time - start_time
-
-to_save = ["distance", "velocity", "density", "pressure", "speed_of_sound", "mass_flow", "entropy", "mach_number", "quality", "stable_fraction"]
-function.save_selected_to_csv(solution, to_save, filename="nakagawa_p61_T293_IDEM2.csv")
 
 
 # ====================================================
@@ -139,26 +134,26 @@ ax1.plot(
     markerfacecolor="w",
     label="Critical branch HEM",
 )
-# ax1.plot(
-#     impossible_solution["distance"],
-#     impossible_solution["pressure"],
-#     linewidth=1.00,
-#     marker="o",
-#     markersize=3.5,
-#     markeredgewidth=1.00,
-#     markerfacecolor="w",
-#     label="Impossible branch HEM",
-# )
-# ax1.plot(
-#     possible_solution["distance"],
-#     possible_solution["pressure"],
-#     linewidth=1.00,
-#     marker="o",
-#     markersize=3.5,
-#     markeredgewidth=1.00,
-#     markerfacecolor="w",
-#     label="Possible branch HEM",
-# )
+ax1.plot(
+    impossible_solution["distance"],
+    impossible_solution["pressure"],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Impossible branch HEM",
+)
+ax1.plot(
+    possible_solution["distance"],
+    possible_solution["pressure"],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Possible branch HEM",
+)
 # ax1.plot(
 #     supersonic_solution["distance"],
 #     supersonic_solution["pressure"],
@@ -187,26 +182,26 @@ ax2.plot(
     markerfacecolor="w",
     label="Critical branch HEM",
 )
-# ax2.plot(
-#     impossible_solution["distance"],
-#     impossible_solution["velocity"],
-#     linewidth=1.00,
-#     marker="o",
-#     markersize=3.5,
-#     markeredgewidth=1.00,
-#     markerfacecolor="w",
-#     label="Impossible branch HEM",
-# )
-# ax2.plot(
-#     possible_solution["distance"],
-#     possible_solution["velocity"],
-#     linewidth=1.00,
-#     marker="o",
-#     markersize=3.5,
-#     markeredgewidth=1.00,
-#     markerfacecolor="w",
-#     label="Possible branch HEM",
-# )
+ax2.plot(
+    impossible_solution["distance"],
+    impossible_solution["velocity"],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Impossible branch HEM",
+)
+ax2.plot(
+    possible_solution["distance"],
+    possible_solution["velocity"],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Possible branch HEM",
+)
 # ax2.plot(
 #     supersonic_solution["distance"],
 #     supersonic_solution["velocity"],
@@ -320,7 +315,6 @@ ax4.plot(
 figure.tight_layout(pad=1)
 fig.tight_layout(pad=2)
 # plt.show()
-plt.savefig(os.path.join("results", "properties.png"))
 
 # ====================================================
 # === 5. SAVE PLOT T-s AND P-h DIAGRAMS            ===

@@ -52,7 +52,7 @@ state_in = fluid.get_state(bpy.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
 
-supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D_autonomous(
+supersonic_solution, possible_solution, impossible_solution, solution, flow_rate, pif_iterations = function.pipeline_steady_state_1D(
     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
     nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=False, include_heat_transfer=False)
@@ -274,41 +274,49 @@ ax4 = axs[1, 1]
 ax4.set_xlabel("Axis position [-]", fontsize=14)
 ax4.set_ylabel("Determinant [-]", fontsize=14)
 ax4.plot(
+    solution["distance"],
+    solution["determinant"],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Critical flow",
+)
+ax4.plot(
+    impossible_solution["distance"],
+    impossible_solution["determinant"],
+    linewidth=1.00,
+    marker="o",
+    markersize=3.5,
+    markeredgewidth=1.00,
+    markerfacecolor="w",
+    label="Impossible flow",
+)
+ax4.plot(
     possible_solution["distance"],
-    possible_solution["quality"],
+    possible_solution["determinant"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
     markeredgewidth=1.00,
     markerfacecolor="w",
-    label="equilibrium quality",
+    label="Possible flow",
 )
 ax4.plot(
     supersonic_solution["distance"],
-    supersonic_solution["entropy"],
+    supersonic_solution["determinant"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
     markeredgewidth=1.00,
     markerfacecolor="w",
-    label="equilibrium quality",
-)
-ax4.plot(
-    supersonic_solution["distance"],
-    supersonic_solution["entropy"],
-    linewidth=1.00,
-    marker="o",
-    markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
-    label="quality",
+    label="Supersonic branch",
 )
 ax4.legend(loc="best")
-plt.show()
 figure.tight_layout(pad=1)
 fig.tight_layout(pad=2)
 # plt.show()
-plt.savefig(os.path.join("results", "properties.png"))
 
 # ====================================================
 # === 5. SAVE PLOT T-s AND P-h DIAGRAMS            ===
@@ -388,9 +396,6 @@ ax2.legend(loc="best")
 
 fig.tight_layout(pad=2)
 
-plt.savefig(os.path.join("results", "diagrams.png"))
-plt.show()
-
 # ====================================================
 # === 6. SAVE PLOT NUMERICAL INTEGRATION ERROR     ===
 # ====================================================
@@ -400,29 +405,22 @@ plt.show()
 # The entropy is conserved if both heat transfer and friction are zero
 
 figure, ax = plt.subplots(figsize=(6.0, 4.8))
-m_error_sub = solution["mass_flow"] / solution["mass_flow"][0] - 1
+m_error_sub = impossible_solution["mass_flow"] / impossible_solution["mass_flow"][0] - 1
 h_error_sub = solution["total_enthalpy"] / solution["total_enthalpy"][0] - 1
 s_error_sub = solution["entropy"] / solution["entropy"][0] - 1
 ax.set_xlabel("Axis distance (m)")
 ax.set_ylabel("Integration error")
-ax.set_yscale("log")
-ax.plot(solution["distance"], np.abs(m_error_sub), label="Mass flow error")
-ax.plot(solution["distance"], np.abs(h_error_sub), label="Total enthalpy error")
+# ax.set_yscale("log")
+ax.plot(impossible_solution["distance"], impossible_solution["mass_flow"], label="Mass flow error - subsonic")
+# ax.plot(solution["distance"], np.abs(h_error_sub), label="Total enthalpy error")
 # ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
-m_error_sup = supersonic_solution["mass_flow"] / solution["mass_flow"][0] - 1
+m_error_sup = supersonic_solution["mass_flow"] / impossible_solution["mass_flow"][0] - 1
 h_error_sup = supersonic_solution["total_enthalpy"] / solution["total_enthalpy"][0] - 1
 s_error_sup = supersonic_solution["entropy"] / solution["entropy"][0] - 1
-ax.plot(supersonic_solution["distance"], np.abs(m_error_sup), label="Mass flow error")
-ax.plot(supersonic_solution["distance"], np.abs(h_error_sup), label="Total enthalpy error")
+ax.plot(supersonic_solution["distance"], supersonic_solution["mass_flow"], label="Mass flow error - supersonic")
+# ax.plot(supersonic_solution["distance"], np.abs(h_error_sup), label="Total enthalpy error")
 # ax.plot(solution["distance"], np.abs(s_error), label="Entropy error")
 ax.legend(loc="best")
 fig.tight_layout(pad=2)
-
-plt.savefig(os.path.join("results", "error.png"))
-
-# Copy yaml file in the result folder
-shutil.copyfile("settings.yaml", 
-                os.path.join("results", "settings.yaml"))
-
 
 plt.show()
