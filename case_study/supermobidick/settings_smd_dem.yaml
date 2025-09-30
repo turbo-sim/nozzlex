@@ -1,0 +1,21 @@
+boundary_conditions:
+  p_stagnation:  120e5
+  T_stagnation: 592
+  critical_flow: True # If True the PIF will be performed
+  mach_inlet: None
+  mass_flow_inlet: None
+
+nozzle_parameters:
+  radius_in: 0.0335
+  radius_throat: 0.12e-3
+  radius_out: 0.27e-3
+  convergent_length: 27.35e-3
+  divergent_length: 56.15e-3
+  roughness: 9.4e-6
+  type: Axisymmetric # Planar or Axisymmetric or Convergent
+  width: 3e-3  # Only for planar nozzles
+ 
+fluid:
+  perfect_gas: false
+  look_up_table: false # If LuT is false, CoolProp is used
+  fluid_name: water

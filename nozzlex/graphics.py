@@ -3,15 +3,6 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-# Attempt to import imageio for video generatioj
-try:
-    import imageio
-
-    IMEGEIO_AVAILABLE = True
-except ImportError:
-    IMAGEIO_AVAILABLE = False
-
-
 from cycler import cycler
 
 COLORS_PYTHON = [

@@ -418,8 +418,8 @@ class Fluid:
             a_HEM = (1 / rho_mix / compressibility_HEM) ** 0.5
 
         # Define small perturbations
-        delta_p = 1  # Pa
-        delta_h = 1  # J/kg
+        delta_p = 1e-9 * p_mix # Pressure Perturbation
+        delta_h = 1e-6 * h_mix # Enthalpy perturbation
 
         # # Perturb pressure keeping h fixed (forward difference)
         # AS_p_base = CP.AbstractState(self.backend, self.name)
@@ -431,7 +431,7 @@ class Fluid:
         # rho_p_plus = AS_p_plus.rhomass()
 
         # drho_dP = (rho_p_plus - rho_base_p) / delta_p
-        # # print("drho_dP FD (forward)", drho_dP)
+        # print("drho_dP FD (forward)", drho_dP)
 
         # # Perturb enthalpy keeping p fixed (forward difference)
         # AS_h_base = CP.AbstractState(self.backend, self.name)
@@ -443,7 +443,7 @@ class Fluid:
         # rho_h_plus = AS_h_plus.rhomass()
 
         # drho_dh = (rho_h_plus - rho_base_h) / delta_h
-        # # print("drho_dh FD (forward)", drho_dh)
+        # print("drho_dh FD (forward)", drho_dh)
 
         # For reference, CoolProp's internal two-phase derivatives
         try:
@@ -463,10 +463,14 @@ class Fluid:
         properties["rhomass"] = rho_mix
         properties["rho_L"] = rho_L
         properties["rho_V"] = rho_V
+        properties["h_V"] = h_V
+        properties["h_L"] = h_L
         properties["drhodp_L"] = drhodp_L
         properties["drhodp_V"] = drhodp_V
         properties["drhodh_L"] = drhodh_L
         properties["drhodh_V"] = drhodh_V
+        properties["dsdp_L"] = dsdp_L
+        properties["dsdp_V"] = dsdp_V
         properties["umass"] = u_mix
         properties["hmass"] = h_mix
         properties["smass"] = s_mix
@@ -482,6 +486,8 @@ class Fluid:
         properties["isothermal_compressibility"] = np.nan
         properties["isobaric_expansion_coefficient"] = np.nan
         properties["viscosity"] = mu_mix
+        properties["viscosity_L"] = mu_L
+        properties["viscosity_V"] = mu_V
         properties["conductivity"] = k_mix
         properties["Q"] = mass_frac_V
         properties["quality_mass"] = mass_frac_V

@@ -584,7 +584,7 @@ def pipeline_steady_state_1D(
     def stop_at_singularity(t, y):
         _, out = odefun(t, y)
         flag = out["flag"]
-        return flag-1
+        return flag - 1
     stop_at_singularity.terminal = True  
     stop_at_singularity.direction = 1  
     
