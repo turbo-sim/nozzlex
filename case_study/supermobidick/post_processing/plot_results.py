@@ -3,15 +3,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import nozzlex as nx
 
+case = "120b" # For SMD, either 120a or 120b
+
 # Apply your plotting options
 nx.set_plot_options(grid=False)
 
 # Read simulation CSV
-simulation_results = pd.read_csv("results_120a.csv")
+simulation_results = pd.read_csv(f"results_{case}.csv")
 simulation_results.columns = simulation_results.columns.str.strip().str.lower()
 
 # Read experimental CSV
-experimental_data = pd.read_csv("SMD_120a.csv")
+experimental_data = pd.read_csv(f"SMD_{case}.csv")
 experimental_data.columns = experimental_data.columns.str.strip().str.lower()
 
 # Define variables to plot
@@ -80,11 +82,11 @@ save_folder = "images"
 os.makedirs(save_folder, exist_ok=True)
 
 # Define base filename
-base_filename = os.path.join(save_folder, "120a")
+base_filename = os.path.join(save_folder, case)
 
 # Save in multiple formats
 fig.savefig(base_filename + ".png", dpi=300)
 fig.savefig(base_filename + ".svg")
 fig.savefig(base_filename + ".eps")
 
-plt.show()
+# plt.show()

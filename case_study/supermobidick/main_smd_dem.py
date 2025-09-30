@@ -151,18 +151,18 @@ fig.tight_layout(pad=1.0)
 # === 5. SAVE SOLUTION AS CSV                      ===
 # ====================================================
 
-# Create post_processing folder if not existing
-output_dir = os.path.join(os.path.dirname(__file__), "post_processing")
-os.makedirs(output_dir, exist_ok=True)
+# # Create post_processing folder if not existing
+# output_dir = os.path.join(os.path.dirname(__file__), "post_processing")
+# os.makedirs(output_dir, exist_ok=True)
 
-# Convert solution dict into a DataFrame
-df = pd.DataFrame(solution)
+# # Convert solution dict into a DataFrame
+# df = pd.DataFrame(solution)
 
-# Save CSV inside post_processing
-output_file = os.path.join(output_dir, "results_120b.csv")
-df.to_csv(output_file, index=False)
+# # Save CSV inside post_processing
+# output_file = os.path.join(output_dir, "results_120b.csv")
+# df.to_csv(output_file, index=False)
 
-print(f"Solution saved to {output_file}")
+# print(f"Solution saved to {output_file}")
 
 
 plt.show()

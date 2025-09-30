@@ -682,7 +682,7 @@ def pipeline_steady_state_1D_autonomous(
     def stop_at_zero_det(t, y):
         _, out = odefun(y)
         det_M = out["determinant_D"]
-        return det_M + 1e-1
+        return det_M
     stop_at_zero_det.terminal = True  
     stop_at_zero_det.direction = 0   
     
@@ -705,7 +705,7 @@ def pipeline_steady_state_1D_autonomous(
         pif_iterations = 0
         print("Possible-Impossible Flow (PIF) algorithm starts...")
         error = abs(m_impossible-m_possible)/m_possible
-        tol = 1e-4
+        tol = 1e-3
         while error > tol:
             pif_iterations += 1  
             raw_solution = scipy.integrate.solve_ivp(
