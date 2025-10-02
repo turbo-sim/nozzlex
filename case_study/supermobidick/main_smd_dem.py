@@ -99,10 +99,10 @@ ax1.legend(loc="best")
 # Second subplot - Velocity
 ax2 = axs[0, 1]
 ax2.set_xlabel("Axis position [-]", fontsize=14)
-ax2.set_ylabel("Velocity [m/s]", fontsize=14)
+ax2.set_ylabel("Density", fontsize=14)
 ax2.plot(
     solution["distance"],
-    solution["velocity"],
+    solution["density"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -118,7 +118,7 @@ ax3.set_xlabel("Axis position [-]", fontsize=14)
 ax3.set_ylabel("Mach [-]", fontsize=14)
 ax3.plot(
     solution["distance"],
-    solution["mach_number"],  # Replace with Mach if available
+    solution["mach_number"],
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -131,10 +131,10 @@ ax3.legend(loc="best")
 # Fourth subplot - Density
 ax4 = axs[1, 1]
 ax4.set_xlabel("Axis position [-]", fontsize=14)
-ax4.set_ylabel("Gamma [-]", fontsize=14)
+ax4.set_ylabel("Void fraction[-]", fontsize=14)
 ax4.plot(
     solution["distance"],
-    solution["gamma"],  # Replace with density if available
+    solution["void_fraction"],  # Replace with density if available
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -159,7 +159,7 @@ fig.tight_layout(pad=1.0)
 # df = pd.DataFrame(solution)
 
 # # Save CSV inside post_processing
-# output_file = os.path.join(output_dir, "results_120b.csv")
+# output_file = os.path.join(output_dir, "results_120a.csv")
 # df.to_csv(output_file, index=False)
 
 # print(f"Solution saved to {output_file}")

@@ -19,10 +19,10 @@ experimental_data.columns = experimental_data.columns.str.strip().str.lower()
 # Define variables to plot
 variables = [
     ("pressure", "Pressure [Pa]"),
+    ("void_fraction", "Void fraction [-]"),
     ("quality", "Quality [-]"),
     ("gamma", "Gamma [-]"),
     ("mach_number", "Mach number [-]"),
-    ("density", "Density [kg/m³]"),
     ("mass_flow", "Mass flow [kg/s]"),
 ]
 
@@ -31,6 +31,8 @@ fig, axes = plt.subplots(3, 2, figsize=(12, 10))
 axes = axes.flatten()
 
 colors = plt.cm.tab10.colors  # color cycle
+
+exp = ["pressure", "void_fraction"]
 
 for i, (var, ylabel) in enumerate(variables):
     ax = axes[i]
@@ -49,20 +51,20 @@ for i, (var, ylabel) in enumerate(variables):
         label=sim_label
     )
 
-    # Overlay experimental data on the first subplot only
-    if i == 0:
+    # Overlay experimental data if variable is in exp list
+    if var in exp:
         ax.plot(
-            experimental_data["x"],
-            experimental_data["y"]*1e5, 
+            experimental_data[f"x_{var}"],
+            experimental_data[f"y_{var}"],
             marker="s",
             linestyle="None",
             color=colors[3],
             markerfacecolor=colors[3],
             markersize=4,
-            label="Experimental data"
+            label="Experimental data" if i == 0 else None  # legend only in first subplot
         )
 
-    ax.set_xlabel("Distance [m]")
+    ax.set_xlabel("Axis position [m]")
     ax.set_ylabel(ylabel)
 
     # Legend only on the first subplot
@@ -76,6 +78,8 @@ if len(variables) < len(axes):
     fig.delaxes(axes[-1])
 
 plt.tight_layout()
+
+# Saving the plots
 
 # Define folder to save plots
 save_folder = "images"

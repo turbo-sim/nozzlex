@@ -48,7 +48,9 @@ def nozzle_single_phase_autonomous(tau, Y, args):
     d0 = state0["d"]
 
     # --- Geometry ---
-    A, dAdx, perimeter, diameter = args.geometry(x, L)
+    # A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
+    A, dAdx, perimeter, radius = args.geometry(x) # When using linear convergent divergent geometry
+    diameter = 2 * radius
 
     # --- Wall heat transfer and friction ---
     Re = v * d * diameter / jnp.maximum(mu, 1e-12)
@@ -243,4 +245,53 @@ def symmetric_nozzle_geometry(x, L, A_inlet=0.30, A_throat=0.15):
     perimeter = jnp.pi * diameter          # m
 
     return A, dAdx, perimeter, diameter
+
+# Nakagawa featurs now
+def linear_convergent_divergent_nozzle(
+    x,
+    convergent_length=(83.50e-3 - 56.15e-3),
+    divergent_length=56.15e-3,
+    radius_in=5e-3,
+    radius_throat=0.12e-3,
+    radius_out=0.72e-3,
+    axisymmetric=False,
+    width=3e-3,
+):
+    """
+    JAX-safe linear convergent-divergent nozzle.
+    - If axisymmetric=True: A = pi r^2
+    - Else (planar):       A = 2 r * width
+    Uses JAX control flow to avoid TracerBoolConversionError.
+    Returns: (A, dAdx, perimeter, radius) with shapes matching x.
+    """
+    x = jnp.asarray(x)
+
+    if axisymmetric:  
+        area_in     = jnp.pi * radius_in**2
+        area_throat = jnp.pi * radius_throat**2
+        area_out    = jnp.pi * radius_out**2
+    else:
+        area_in     = 2.0 * radius_in * width
+        area_throat = 2.0 * radius_throat * width
+        area_out    = 2.0 * radius_out * width
+
+    dAdx_conv = (area_throat - area_in) / convergent_length
+    dAdx_div  = (area_out    - area_throat) / divergent_length
+
+    # JAX piecewise selection based on x
+    cond = x <= convergent_length
+    A    = jnp.where(cond,
+                     area_in + dAdx_conv * x,
+                     area_throat + dAdx_div * (x - convergent_length))
+    dAdx = jnp.where(cond, dAdx_conv, dAdx_div)
+
+    if axisymmetric:
+        radius    = jnp.sqrt(A / jnp.pi)
+        perimeter = 2.0 * jnp.pi * radius
+    else:
+        radius    = A / (2.0 * width)
+        perimeter = 2.0 * (width + 2.0 * radius)
+
+    return A, dAdx, perimeter, radius
+
 

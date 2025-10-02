@@ -1,6 +1,6 @@
 boundary_conditions:
   p_stagnation:  120e5
-  T_stagnation: 592
+  T_stagnation: 592.55
   critical_flow: True # If True the PIF will be performed
   mach_inlet: None
   mass_flow_inlet: None

@@ -383,8 +383,8 @@ def pipeline_steady_state_1D_autonomous(
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        m_possible = 15
-        m_impossible = 17
+        m_possible = 15.5
+        m_impossible = 15.5
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
@@ -439,10 +439,15 @@ def pipeline_steady_state_1D_autonomous(
             rho_L = state_L["rho"]
             vol_L = 1 / rho_L
             visc_L = state_L["viscosity"]
+            s_L = state_L["s"]
             h_V = state_V["h"]
             rho_V = state_V["rho"]
             vol_V = 1 / rho_V
+            vol_frac_V = 0
             visc_V = state_V["viscosity"]
+            s_V = state_V["s"]
+
+            T = state["T"]
 
             if 0 < quality < 1 and 0 < gamma < 1:
 
@@ -544,8 +549,6 @@ def pipeline_steady_state_1D_autonomous(
                 density_liq_meta = vol_frac_L * rho_L + vol_frac_meta * rho_meta
 
                 # friction factor
-                state_L = fluid_rg.set_state(rg.PQ_INPUTS, p, 0.00)
-                state_V = fluid_rg.set_state(rg.PQ_INPUTS, p, 1.00)
                 stress_wall, _, _ = get_wall_friction(
                     velocity=v,
                     density=density_liq_meta,
@@ -561,11 +564,13 @@ def pipeline_steady_state_1D_autonomous(
                 dem_source_term = 1e-3 if dem_source_term < 1e-3 else dem_source_term
 
                 sound_speed = speed_sound_dem(gamma=gamma, quality_hem=x_eq, state_L=state_L, state_V=state_V, rho_mix_dem=rho, rho_meta=rho_meta, c_meta=meta["a"])
-            
+                s = X * s_V + (gamma-X) * s_L + (1 - gamma) * s_frozen
+
             else:  # single phase and two-phase HEM
                 rho = state["rho"]
                 x = state["Q"]
                 h = state["h"]
+                s = state["s"]
                 sound_speed = state["a"]
                 drho_dP = state["drho_dP"]
                 drho_dh = state["drho_dh"]
@@ -649,11 +654,13 @@ def pipeline_steady_state_1D_autonomous(
                 "velocity": v,
                 "density": rho,
                 "pressure": p,
+                "temperature": T,
                 "gamma": gamma,
                 "quality": quality,
+                "void_fraction": vol_frac_V,
                 "speed_of_sound": sound_speed,
                 "enthalpy": h,
-                # "entropy": state["s"],
+                "entropy": s,
                 "total_enthalpy": h + 0.5 * v**2,
                 "mach_number": v / sound_speed,
                 "mass_flow": v * rho * area,
