@@ -21,6 +21,9 @@ def nozzle_single_phase_autonomous(tau, Y, args):
     x, v, d, p = Y
 
     # v = jnp.where(jnp.abs(v) < 1e-6, jnp.sign(v)*1e-6, v)
+    # Debug print using jax.debug.print
+    # jax.debug.print("x={:.6f}, v={:.6f}, rho={:.6f}, p={:.6f}", x, v, d, p)
+
 
     # --- Geometry / model parameters ---
     fluid = args.fluid
@@ -31,7 +34,10 @@ def nozzle_single_phase_autonomous(tau, Y, args):
     heat_transfer = args.heat_transfer
 
     # --- Thermodynamic state ---
-    state = fluid.get_props(jxp.DmassP_INPUTS, d, p)
+    # d = jnp.clip(d, 1e-10, 1e6)  # enforce valid density range
+    # p = jnp.clip(p, 1e2, 1e9)   # enforce valid pressure range
+
+    state = fluid.get_state(jxp.DmassP_INPUTS, d, p)
     T = state["T"]
     h = state["h"]
     s = state["s"]
@@ -42,15 +48,15 @@ def nozzle_single_phase_autonomous(tau, Y, args):
 
     # Stagnation state
     h0 = state["h"] + 0.5 * v**2
-    state0 = fluid.get_props(jxp.HmassSmass_INPUTS, h0, state["s"])
+    state0 = fluid.get_state(jxp.HmassSmass_INPUTS, h0, state["s"])
     p0 = state0["p"]
     T0 = state0["T"]
     d0 = state0["d"]
 
     # --- Geometry ---
-    # A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
-    A, dAdx, perimeter, radius = args.geometry(x) # When using linear convergent divergent geometry
-    diameter = 2 * radius
+    A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
+    # A, dAdx, perimeter, radius = args.geometry(x) # When using linear convergent divergent geometry
+    # diameter = 2 * radius
 
     # --- Wall heat transfer and friction ---
     Re = v * d * diameter / jnp.maximum(mu, 1e-12)
@@ -99,6 +105,143 @@ def nozzle_single_phase_autonomous(tau, Y, args):
     dp_dtau = N[2]
     rhs = jnp.array([dv_dtau / dx_dtau, dd_dtau / dx_dtau, dp_dtau / dx_dtau])
     rhs_autonomous = jnp.array([dx_dtau, dv_dtau, dd_dtau, dp_dtau])
+
+    # Export data
+    out = {
+        "x": x,
+        "v": v,
+        "d": d,
+        "p": p,
+        "rhs": rhs,
+        "rhs_autonomous": rhs_autonomous,
+        "A": A,
+        "dAdx": dAdx,
+        "diameter": diameter,
+        "perimeter": perimeter,
+        "h0": h0,
+        "p0": p0,
+        "T0": T0,
+        "d0": d0,
+        "Ma": v / state["a"],
+        "Re": Re,
+        "f_D": f_D,
+        "tau_w": tau_w,
+        "q_w": q_w,
+        "htc": htc,
+        "m_dot": d * v * A,
+        "A_mat": A_mat,
+        "b_vec": b_vec,
+        "D": D,
+        "N": N,
+    }
+
+    return {**out, **state.to_dict(include_aliases=True)}
+    # return {**out, **state}
+
+def nozzle_single_phase_autonomous_ph(tau, Y, args):
+    """
+    Autonomous formulation of the nozzle equations:
+        dx/dt   = det(A)
+        dy_i/dt = det(A with column i replaced by b)
+
+    State vector: Y = [x, v, rho, p]
+    """
+    x, p, v, h = Y
+
+    # v = jnp.where(jnp.abs(v) < 1e-6, jnp.sign(v)*1e-6, v)
+    # Debug print using jax.debug.print
+    # jax.debug.print("x={:.6f}, v={:.6f}, p={:.6f}, h={:.6f}", x, v, p, h)
+
+    # --- Geometry / model parameters ---
+    fluid = args.fluid
+    L = args.length
+    eps_wall = args.roughness
+    T_ext = args.T_wall
+    wall_friction = args.wall_friction
+    heat_transfer = args.heat_transfer
+
+    # --- Thermodynamic state ---
+    # d = jnp.clip(d, 1e-10, 1e6)  # enforce valid density range
+    # p = jnp.clip(p, 1e2, 1e9)   # enforce valid pressure range
+
+    state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
+    T = state["T"]
+    d = state["rho"]
+    s = state["s"]
+    a = state["a"]
+    cp = state["cp"]
+    mu = state["mu"]
+    G = state["gruneisen"]
+
+    # Stagnation state
+    h0 = state["h"] + 0.5 * v**2
+    state0 = fluid.get_state(jxp.HmassSmass_INPUTS, h0, state["s"])
+    p0 = state0["p"]
+    T0 = state0["T"]
+    d0 = state0["d"]
+    h0 = state0["h"]
+
+    # --- Geometry ---
+    A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
+    # A, dAdx, perimeter, radius = args.geometry(x) # When using linear convergent divergent geometry
+    # diameter = 2 * radius
+
+    # --- Wall heat transfer and friction ---
+    Re = v * d * diameter / jnp.maximum(mu, 1e-12)
+    f_D = get_friction_factor_haaland(Re, eps_wall, diameter)
+    tau_w = get_wall_viscous_stress(f_D, d, v)
+    htc = 10000*get_heat_transfer_coefficient(v, d, cp, f_D)
+    htc = jnp.clip(htc, 0.0, 1e6)   # pick bound based on your scaling
+    q_w = htc * (T_ext - T)
+
+    # Mask with booleans (convert to 0.0 if disabled)
+    tau_w = wall_friction * tau_w
+    f_D = wall_friction * f_D
+    q_w = heat_transfer * q_w
+    htc = heat_transfer * htc
+
+    dddp = (1 + G) / a**2
+    dddh = - (d * G) / a**2
+    
+    # --- Build A matrix and b vector ---
+    # A_mat = jnp.array([[d, v, 0.0, 0.0], [d * v, 0.0, 1.0, 0.0], [v, 0.0, 0.0, 1.0], [0, 1.0, - dddp, - dddh]])
+
+    # b_vec = jnp.array(
+    #     [
+    #         -d * v / A * dAdx,
+    #         -(perimeter / A) * tau_w,
+    #         0.00,
+    #         0.00,
+    #     ]
+    # )
+
+    A_mat = jnp.array([[v * dddp, d, v * dddh], [1.00, d * v, 0], [v, 0, -d * v]])
+
+    b_vec = jnp.array(
+        [
+            -d * v / A * dAdx,
+            -(perimeter / A) * tau_w,
+            -v * tau_w * perimeter / A,
+        ]
+    )
+
+    # --- Determinants ---
+    D = jnp.linalg.det(A_mat)
+
+    # Replace columns one by one to compute N_i
+    N = []
+    for i in range(3):
+        A_mod = A_mat.at[:, i].set(b_vec)
+        N.append(jnp.linalg.det(A_mod))
+    N = jnp.array(N)
+
+    # --- Autonomous system: dx/dτ = D, dy/dτ = N_i ---
+    dx_dtau = D
+    dp_dtau = N[0]
+    dv_dtau = N[1]
+    dh_dtau = N[2]
+    rhs = jnp.array([dp_dtau / dx_dtau, dv_dtau / dx_dtau, dh_dtau / dx_dtau])
+    rhs_autonomous = jnp.array([dx_dtau, dp_dtau, dv_dtau, dh_dtau])
 
     # Export data
     out = {
@@ -218,7 +361,6 @@ def get_heat_transfer_coefficient(
     """
     fanning_friction_factor = darcy_friction_factor / 4
     return 0.5 * fanning_friction_factor * velocity * density * heat_capacity
-
 
 # ------------------------------------------------------------------
 # Describe the geometry of the converging diverging nozzle

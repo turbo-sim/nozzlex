@@ -409,7 +409,7 @@ def pipeline_steady_state_1D_autonomous(
         nonlocal init_gamma
 
         z, p, v, h, gamma = y  # position, velocity, density, pressure
-        # print(z)
+        print(z)
 
         # Interpolate geometry-dependent parameters
         area = np.interp(
@@ -449,7 +449,7 @@ def pipeline_steady_state_1D_autonomous(
 
             T = state["T"]
 
-            if 0 < quality < 1 and 0 < gamma < 1:
+            if 0 < quality < 1 and 0 < gamma < 0.999:
 
                 if init_gamma == 0:
                     gamma = 1e-6
@@ -681,7 +681,7 @@ def pipeline_steady_state_1D_autonomous(
             return dy, out
     
         except Exception as e:
-            # print(f"[ODEFUN ERROR @ z={z:.4f}] {e}")
+            print(f"[ODEFUN ERROR @ z={z:.4f}] {e}")
             return [np.nan, np.nan, np.nan, np.nan, np.nan], None  # forces integrator to stop
 
     # This function avoid to keep solving for the Impossible Flow when the matrix

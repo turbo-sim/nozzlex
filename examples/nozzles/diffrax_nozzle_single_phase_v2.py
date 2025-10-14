@@ -73,7 +73,7 @@ def nozzle_single_phase(
         solver,
         t0=t0,
         t1=t1,
-        dt0=None,
+        dt0=1e-12,
         y0=y0,
         args=params_model,
         stepsize_controller=ctrl,
@@ -90,7 +90,7 @@ def nozzle_single_phase(
         solver,
         t0=t0,
         t1=sol.ts[-1],
-        dt0=None,
+        dt0=1e-12,
         y0=y0,
         args=params_model,
         saveat=saveat,
@@ -162,8 +162,8 @@ if __name__ == "__main__":
         T_wall=300.0,  # K
         heat_transfer=0.0,
         wall_friction=0.0,
-        fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
-        # fluid=jxp.FluidJAX(name="air", backend="HEOS"),
+        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
+        fluid=jxp.FluidJAX(name="air", backend="HEOS"),
         geometry=symmetric_nozzle_geometry,
     )
 
@@ -173,8 +173,8 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Running inlet Mach number sensitivity analysis")
     print("-" * 60)
-    # input_array = jnp.asarray([0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50])
-    input_array = np.linspace(0.15, 0.8, 10)
+    input_array = jnp.asarray([0.15, 0.2, 0.25, 0.4, 0.5])
+
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, Ma in enumerate(input_array):
@@ -229,21 +229,23 @@ if __name__ == "__main__":
         params_model = replace_param(params_model, "Ma_in", Mach_in)
         sol = nozzle_single_phase(params_model, params_solver)
         max_mach = jnp.max(sol.ys["Ma"])
-        return 1. - max_mach
+        return max_mach**2  - 1.
         # return jnp.min(sol.ys["D"])
 
     solvers = {
-        "Bisection": optx.Bisection(rtol=1e-6, atol=1e-6),
-        # "Newton": optx.Newton(rtol=1e-6, atol=1e-6),
-        # "Chord": optx.Chord(rtol=1e-6, atol=1e-6),
+        "Bisection": optx.Bisection(rtol=1e-4, atol=1e-4),
     }
 
-    lower = float(input_array[0])
-    upper = float(input_array[-1])
-    x0_initial = 0.5
+    lower = float(0.2)
+    upper = float(0.5)
+    x0_initial = 0.4
+
+    print(" ")
+    print("-"*80)
+    print("Bisection starts")
+    print("-"*80)
 
     for name, solver in solvers.items():
-        print(f"\n=== {name} solver ===")
         try:
             sol = optx.root_find(
                 critical_mach_residual,
@@ -252,7 +254,7 @@ if __name__ == "__main__":
                 args=params_model,
                 throw=False,
                 options={"lower": lower, "upper": upper},
-                # max_steps=20,
+                # max_steps=20_000,
             )
             print(f"Success: {sol.result == optx.RESULTS.successful}")
             print(f"Root: {sol.value:0.6e}")
@@ -273,9 +275,9 @@ if __name__ == "__main__":
 
     plt.plot(x_vals, y_vals, color = "k") 
     plt.xlabel("Inlet Mach number")
-    plt.ylabel("1 - max(Mach)")
+    # plt.ylabel("1 - max(Mach)")
     # plt.legend(loc="best", fontsize=7)
     fig.tight_layout(pad=1)
 
     # Show figures
-    plt.show()
+    # plt.show()

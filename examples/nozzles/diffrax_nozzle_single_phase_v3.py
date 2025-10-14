@@ -11,7 +11,7 @@ from matplotlib import gridspec
 
 jxp.set_plot_options(grid=False)
 
-from jaxprop.components import (
+from nozzlex.functions import (
     nozzle_single_phase_core,
     symmetric_nozzle_geometry,
     NozzleParams,
@@ -20,6 +20,8 @@ from jaxprop.components import (
     replace_param,
     solve_nozzle_model_collocation,
     initialize_flowfield,
+    compute_critical_inlet,
+    compute_static_state,
 )
 
 
@@ -39,25 +41,20 @@ def transonic_nozzle_single_phase(
 ):
     """
     Transonic converging-diverging nozzle.
-    First uses a collocation method to find the critical (sonic) state,
+    First uses the root finding to find the critical (sonic) state,
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    # TODO Update
-    
-    # --- 1. Find critical state with continuation --
-    Ma_target = jnp.asarray([0.999])
-    z0 = initialize_flowfield(params_bvp.num_points, params_model)
-    for Ma in Ma_target:
-        params_model = replace_param(params_model, "Ma_target", Ma)
-        out, sol = solve_nozzle_model_collocation(
-            initial_guess=z0,
-            params_model=params_model,
-            params_solver=params_bvp,
-        )
+    Ma_in_cr = compute_critical_inlet(Ma_lower=0.05, Ma_upper=0.95, params_model=params_model, params_solver=params_ivp)
 
-        # Substitute values, keep same array
-        z0 = z0.at[:].set(sol.value)
+    state_in = compute_static_state(
+        params_model.p0_in,
+        params_model.d0_in,
+        Ma_in_cr,
+        params_model.fluid,
+    )
+    p_in, rho_in, a_in = state_in["p"], state_in["rho"], state_in["a"]
+    v_in = Ma_in_cr * a_in
 
     # --- Define helpers with closure over args_base and fluid ---
     def ode_full_subsonic(t, y, args):
@@ -70,7 +67,7 @@ def transonic_nozzle_single_phase(
     solver = jxp.make_diffrax_solver(params_ivp.solver_name)
     adjoint = jxp.make_diffrax_adjoint(params_ivp.adjoint_name)
     ctrl = dfx.PIDController(rtol=params_ivp.rtol, atol=params_ivp.atol)
-    y_inlet = jnp.array([out["v"][0], out["d"][0], out["p"][0]])
+    y_inlet = jnp.array([v_in, rho_in, p_in])
     event1 = dfx.Event(
         cond_fn=_mach_event_cond,
         root_finder=optx.Bisection(rtol=1e-10, atol=1e-10),
@@ -82,7 +79,7 @@ def transonic_nozzle_single_phase(
         solver,
         t0=1e-9,
         t1=1000,
-        dt0=None,
+        dt0=1e-9,
         y0=y_inlet,
         args=params_model,
         saveat=save1,
@@ -127,7 +124,7 @@ def transonic_nozzle_single_phase(
         solver,
         t0=1e-9,
         t1=params_model.length,
-        dt0=None,
+        dt0=1e-9,
         y0=y_inlet,
         args=params_model,
         saveat=save2,
@@ -142,7 +139,7 @@ def transonic_nozzle_single_phase(
 def _mach_event_cond(t, y, args, **kwargs):
     """Event function: zero when M^2 - Ma_low^2 = 0."""
     v, rho, p = y
-    a = args.fluid.get_props(jxp.DmassP_INPUTS, rho, p)["a"]
+    a = args.fluid.get_state(jxp.DmassP_INPUTS, rho, p)["a"]
     Ma_sqr = (v / a) ** 2
     return Ma_sqr - args.Ma_low**2
 
@@ -166,25 +163,43 @@ def _smoothstep(x):
 # -----------------------------------------------------------------------------
 # Converging-diverging nozzle example
 # -----------------------------------------------------------------------------
+
+fluid_name = "air"
+h_min = 5e3  # J/kg
+h_max = 2e6  # J/kg
+p_min = 0.01e5    # Pa
+p_max = 10e5   # Pa
+N = 80
+
 if __name__ == "__main__":
 
     # # Define model parameters
     # fluid_name = "air"
     # fluid = jxp.perfect_gas.get_constants(fluid_name, T_ref=300, P_ref=101325)
 
+    # -- 1. Find critical state with continuation --
+
     params_model = NozzleParams(
         p0_in=1.0e5,  # Pa
         d0_in=1.20,  # kg/m³
         D_in=0.050,  # m
         length=5.00,  # m
-        roughness=10e-6,  # m
+        roughness=1e-6,  # m
         T_wall=300.0,  # K
-        Ma_low=0.95,
-        Ma_high=1.025,
+        Ma_low=0.978,
+        Ma_high=1.02,
         heat_transfer=0.0,
         wall_friction=0.0,
-        fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
-        # fluid=jxp.FluidJAX(name="air", backend="HEOS"),
+        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
+        # fluid=jxp.FluidJAX(name="air"),
+        fluid = jxp.FluidBicubic(fluid_name=fluid_name,
+                                 backend="HEOS",
+                                 h_max=h_max,
+                                 h_min=h_min,
+                                 p_min=p_min,
+                                 p_max=p_max,
+                                 N_h=N,
+                                 N_p=N),
         geometry=symmetric_nozzle_geometry,
     )
 
@@ -209,11 +224,12 @@ if __name__ == "__main__":
         atol=1e-8,
     )
 
+
     # Solve the problem
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([2, 3, 4, 5, 6]) * 1e5
+    input_array = jnp.asarray([2, 3, 4, 5]) * 1e5
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, p0_in in enumerate(input_array):
@@ -280,7 +296,7 @@ if __name__ == "__main__":
     axs[2].set_ylabel("Enthalpy (J/kg)")
     for color, val, sol in zip(colors, input_array, solution_list):
         # axs[2].plot(sol.ys["x"], sol.ys["h"], color=r["color"], markersize=3, marker"o")
-        axs[2].plot(sol.ys["x"], sol.ys["h0"], color=color, markersize=3, marker="o")
+        axs[2].plot(sol.ys["x"], sol.ys["h"], color=color, markersize=3, marker="o")
 
     # Entropy
     axs[3].set_ylabel("Entropy (J/kg/K)")

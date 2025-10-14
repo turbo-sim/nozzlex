@@ -116,8 +116,8 @@ if __name__ == "__main__":
         T_wall=300.0,  # K
         heat_transfer=0.0,
         wall_friction=0.0,
-        # fluid=jxp.FluidJAX(name="air", backend="HEOS"),
-        fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
+        fluid=jxp.FluidJAX(name="air", backend="HEOS"),
+        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
         geometry=symmetric_nozzle_geometry,
     )
 
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Running inlet Mach number sensitivity analysis")
     print("-" * 60)
-    input_array = jnp.asarray([0.05, 0.10, 0.15, 0.20, 0.25, 0.35])
+    input_array = jnp.asarray([0.05, 0.10, 0.15, 0.20, 0.25, 0.35, 0.4, 0.45, 0.5])
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, Ma in enumerate(input_array):

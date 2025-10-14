@@ -64,12 +64,13 @@ import jax.numpy as jnp
 import equinox as eqx
 import optimistix as optx
 import jaxprop as jxp
+import diffrax as dfx
 
 from typing import Any, Callable
 
 jax.config.update("jax_enable_x64", True)
 
-from .nozzle_model_core import nozzle_single_phase_core
+from .nozzle_model_core import nozzle_single_phase_core, nozzle_single_phase_autonomous_ph
 
 
 # shorthand factory for float64 arrays
@@ -390,7 +391,7 @@ def initialize_flowfield(num_points, params, Ma_min=0.1, Ma_max=0.2):
     """
     # Inlet stagnation state
     fluid = params.fluid
-    state0_in = fluid.get_props(jxp.DmassP_INPUTS, params.d0_in, params.p0_in)
+    state0_in = fluid.get_state(jxp.DmassP_INPUTS, params.d0_in, params.p0_in)
     a_in = state0_in["a"]  # use inlet speed of sound for initial guess everywhere
     h_in = state0_in["h"]
     s_in = state0_in["s"]
@@ -407,7 +408,7 @@ def initialize_flowfield(num_points, params, Ma_min=0.1, Ma_max=0.2):
 
     # Static density/pressure from h0 = h + v^2/2, s = s_in
     h_static = h_in - 0.5 * flowfield_v**2
-    state_static = fluid.get_props(jxp.HmassSmass_INPUTS, h_static, s_in)
+    state_static = fluid.get_state(jxp.HmassSmass_INPUTS, h_static, s_in)
     d_static = jnp.maximum(state_static["rho"], 1e-12)
     p_static = jnp.maximum(state_static["p"], 1e-12)
 
@@ -551,23 +552,140 @@ def chebyshev_lobatto_interpolate_and_derivative(x_nodes, y_nodes, x_eval):
 
 
 
-
-
 # ---------- Compute static state from stagnation and Mach number ----------
 def compute_static_state(p0, d0, Ma, fluid):
-    """solve h0 - h(p,s0) - 0.5 a(p,s0)^2 Ma^2 = 0 for p"""
-    st0 = fluid.get_props(jxp.DmassP_INPUTS, d0, p0)
+    st0 = fluid.get_state(jxp.DmassP_INPUTS, d0, p0)
     s0, h0 = st0["s"], st0["h"]
 
-    def residual(p_vec, _):
-        p = p_vec[0]
-        st = fluid.get_props(jxp.PSmass_INPUTS, p, s0)
+    # Scalar residual for Bisection
+    def residual(p, _):
+        st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
         a, h = st["a"], st["h"]
-        v = a * Ma
-        return jnp.array([h0 - h - 0.5 * v * v])
+        return h0 - h - 0.5 * (a * Ma)**2
 
-    p_init = jnp.array([0.9 * p0])  # 1-D, not scalar
-    solver = optx.Newton(rtol=1e-10, atol=1e-10)
-    sol = optx.root_find(residual, solver, y0=p_init, args=())
-    state = fluid.get_props(jxp.PSmass_INPUTS, sol.value[0], s0)
+    solver = optx.Bisection(rtol=1e-3, atol=1e-3)
+    lower, upper = 0.4 * p0, p0
+    sol = optx.root_find(residual, solver, y0=0.99 * p0, options={"lower": lower, "upper": upper})
+    state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
     return state
+
+@eqx.filter_jit
+def nozzle_single_phase(params_model, params_solver):
+    """
+    1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
+    State vector: y = [x, p, v, h].
+    """
+    # --- inlet state ---
+    state_in = compute_static_state(
+        params_model.p0_in,
+        params_model.d0_in,
+        params_model.Ma_in,
+        params_model.fluid,
+    )
+    p_in, rho_in, a_in, h_in = (
+        state_in["p"],
+        state_in["rho"],
+        state_in["a"],
+        state_in["h"],
+    )
+    v_in = params_model.Ma_in * a_in
+    x_in = 1e-9  # start slightly after inlet
+    y0 = jnp.array([x_in, p_in, v_in, h_in])
+
+    # --- solver setup ---
+    t0, t1 = 0.0, 1e9
+    solver = jxp.make_diffrax_solver(params_solver.solver_name)
+    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+    term = dfx.ODETerm(eval_ode_rhs)
+    ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
+
+    # --- event: stop at nozzle exit ---
+    def eval_end_of_domain_event(t, y, args, **kwargs):
+        x = y[0]
+        L = args.length
+        return jnp.minimum(x, L - x)
+
+    event = dfx.Event(
+        cond_fn=eval_end_of_domain_event,
+        root_finder=optx.Bisection(rtol=1e-10, atol=1e-10),
+    )
+
+    # --- first solve (find domain end) ---
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=t1,
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        event=event,
+        max_steps=20_000,
+    )
+
+    # --- second solve (save fields) ---
+    ts = jnp.linspace(t0, sol.ts[-1], params_solver.number_of_points)
+    saveat = dfx.SaveAt(ts=ts, t1=True, fn=eval_ode_full)
+    sol_dense = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=sol.ts[-1],
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        saveat=saveat,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        max_steps=20_000,
+    )
+
+    return sol_dense
+
+
+# -----------------------------------------------------------------------------
+# Helper ODE evaluation functions
+# -----------------------------------------------------------------------------
+def eval_ode_full(t, y, args):
+    return nozzle_single_phase_autonomous_ph(t, y, args)
+
+
+def eval_ode_rhs(t, y, args):
+    return nozzle_single_phase_autonomous_ph(t, y, args)["rhs_autonomous"]
+
+
+# -----------------------------------------------------------------------------
+# Critical inlet computation
+# -----------------------------------------------------------------------------
+def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
+    """
+    Finds the inlet Mach number that makes the flow reach Mach 1 using jaxprop.
+    Fully JAX-traceable (compatible with jit/tracers).
+    """
+
+    # Residual using only jax operations and jxp for property evaluation
+    def critical_mach_residual(Mach_in, params_model):
+        # update model with candidate Mach
+        pm = replace_param(params_model, "Ma_in", Mach_in)
+        sol = nozzle_single_phase(pm, params_solver)
+        max_mach = jnp.max(sol.ys["Ma"])
+        return 1.0 - max_mach
+
+    # Use JAX-safe Bisection
+    solver = optx.Bisection(rtol=1e-3, atol=1e-3)
+    x0_initial = 0.5 * (Ma_lower + Ma_upper)
+
+    # JAX-friendly root find (do not convert to float inside trace)
+    sol_root = optx.root_find(
+        critical_mach_residual,
+        solver,
+        x0_initial,
+        args=params_model,
+        throw=False,
+        options={"lower": Ma_lower, "upper": Ma_upper},
+    )
+    Ma_in_crit = sol_root.value  
+
+    return Ma_in_crit

@@ -273,5 +273,5 @@ if __name__ == "__main__":
     # plt.legend(loc="best", fontsize=7)
     fig.tight_layout(pad=1)
 
-    # Show figures
-    plt.show()
+# Show figures
+plt.show()
