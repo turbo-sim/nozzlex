@@ -14,6 +14,7 @@ jxp.set_plot_options(grid=False)
 from nozzlex.functions import (
     nozzle_single_phase_core,
     symmetric_nozzle_geometry,
+    linear_convergent_divergent_nozzle,
     NozzleParams,
     BVPSettings,
     IVPSettings,
@@ -23,7 +24,6 @@ from nozzlex.functions import (
     compute_critical_inlet,
     compute_static_state,
 )
-
 
 # v1 solves the ode system using the space marching in non-autonomous form
 # v2 solves the autonomous system with events for the bounds of domain ends
@@ -45,15 +45,15 @@ def transonic_nozzle_single_phase(
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    Ma_in_cr = compute_critical_inlet(Ma_lower=0.05, Ma_upper=0.95, params_model=params_model, params_solver=params_ivp)
+    Ma_in_cr = compute_critical_inlet(Ma_lower=1e-3, Ma_upper=0.9, params_model=params_model, params_solver=params_ivp)
 
     state_in = compute_static_state(
         params_model.p0_in,
-        params_model.d0_in,
+        params_model.h0_in,
         Ma_in_cr,
         params_model.fluid,
     )
-    p_in, rho_in, a_in = state_in["p"], state_in["rho"], state_in["a"]
+    p_in, h_in, a_in = state_in["p"], state_in["h"], state_in["a"]
     v_in = Ma_in_cr * a_in
 
     # --- Define helpers with closure over args_base and fluid ---
@@ -67,10 +67,10 @@ def transonic_nozzle_single_phase(
     solver = jxp.make_diffrax_solver(params_ivp.solver_name)
     adjoint = jxp.make_diffrax_adjoint(params_ivp.adjoint_name)
     ctrl = dfx.PIDController(rtol=params_ivp.rtol, atol=params_ivp.atol)
-    y_inlet = jnp.array([v_in, rho_in, p_in])
+    y_inlet = jnp.array([p_in, v_in, h_in])
     event1 = dfx.Event(
         cond_fn=_mach_event_cond,
-        root_finder=optx.Bisection(rtol=1e-10, atol=1e-10),
+        root_finder=optx.Bisection(rtol=1e-6, atol=1e-6),
     )
     term1 = dfx.ODETerm(ode_rhs_subsonic)
     save1 = dfx.SaveAt(t1=True, fn=ode_full_subsonic)
@@ -91,7 +91,7 @@ def transonic_nozzle_single_phase(
 
     # --- 3. Linearization close to critical point ---
     x_crit = sol1.ys["x"][-1]
-    y_crit = jnp.array([sol1.ys["v"][-1], sol1.ys["d"][-1], sol1.ys["p"][-1]])
+    y_crit = jnp.array([sol1.ys["p"][-1], sol1.ys["v"][-1], sol1.ys["h"][-1]])
     f_star, Jy, Jt = _linearize_rhs_at(x_crit, y_crit, params_model)
 
     def ode_full_transonic(t, y, args):
@@ -130,7 +130,7 @@ def transonic_nozzle_single_phase(
         saveat=save2,
         stepsize_controller=ctrl,
         adjoint=adjoint,
-        max_steps=5_000,
+        max_steps=20_000,
     )
 
     return sol2
@@ -138,9 +138,9 @@ def transonic_nozzle_single_phase(
 
 def _mach_event_cond(t, y, args, **kwargs):
     """Event function: zero when M^2 - Ma_low^2 = 0."""
-    v, rho, p = y
-    a = args.fluid.get_state(jxp.DmassP_INPUTS, rho, p)["a"]
-    Ma_sqr = (v / a) ** 2
+    p, v, h = y
+    a = args.fluid.get_state(jxp.HmassP_INPUTS, h, p)["a"]
+    Ma_sqr = (v / a)**2
     return Ma_sqr - args.Ma_low**2
 
 
@@ -164,12 +164,15 @@ def _smoothstep(x):
 # Converging-diverging nozzle example
 # -----------------------------------------------------------------------------
 
-fluid_name = "air"
-h_min = 5e3  # J/kg
-h_max = 2e6  # J/kg
-p_min = 0.01e5    # Pa
-p_max = 10e5   # Pa
-N = 80
+outdir = "fluid_tables"
+fluid_name = "CO2"
+backend = "HEOS"
+h_min = 40e3  # J/kg
+h_max = 450e3  # J/kg
+p_min = 1e5    # Pa
+p_max = 120e5   # Pa
+N_h = 150
+N_p = 150
 
 if __name__ == "__main__":
 
@@ -180,14 +183,15 @@ if __name__ == "__main__":
     # -- 1. Find critical state with continuation --
 
     params_model = NozzleParams(
-        p0_in=1.0e5,  # Pa
-        d0_in=1.20,  # kg/m³
+        p0_in=91e5,  # Pa 
+        d0_in=621.47,  # kg/m³
+        h0_in=310004.694,
         D_in=0.050,  # m
         length=5.00,  # m
         roughness=1e-6,  # m
         T_wall=300.0,  # K
-        Ma_low=0.978,
-        Ma_high=1.02,
+        Ma_low=0.95,
+        Ma_high=1.025,
         heat_transfer=0.0,
         wall_friction=0.0,
         # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
@@ -198,9 +202,9 @@ if __name__ == "__main__":
                                  h_min=h_min,
                                  p_min=p_min,
                                  p_max=p_max,
-                                 N_h=N,
-                                 N_p=N),
-        geometry=symmetric_nozzle_geometry,
+                                 N_h=N_h,
+                                 N_p=N_p),
+        geometry=linear_convergent_divergent_nozzle,
     )
 
     params_bvp = BVPSettings(
@@ -224,12 +228,15 @@ if __name__ == "__main__":
         atol=1e-8,
     )
 
+    L_nakagawa = 83.50e-3
+    params_model = replace_param(params_model, "length", L_nakagawa)
+
 
     # Solve the problem
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([2, 3, 4, 5]) * 1e5
+    input_array = jnp.asarray([91]) * 1e5
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, p0_in in enumerate(input_array):

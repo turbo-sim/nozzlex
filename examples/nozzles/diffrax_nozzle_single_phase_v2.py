@@ -162,8 +162,8 @@ if __name__ == "__main__":
         T_wall=300.0,  # K
         heat_transfer=0.0,
         wall_friction=0.0,
-        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
-        fluid=jxp.FluidJAX(name="air", backend="HEOS"),
+        fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
+        # fluid=jxp.FluidJAX(name="air", backend="HEOS"),
         geometry=symmetric_nozzle_geometry,
     )
 
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Running inlet Mach number sensitivity analysis")
     print("-" * 60)
-    input_array = jnp.asarray([0.15, 0.2, 0.25, 0.4, 0.5])
+    input_array = jnp.linspace(0.1, 0.6, 50)
 
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
@@ -229,7 +229,7 @@ if __name__ == "__main__":
         params_model = replace_param(params_model, "Ma_in", Mach_in)
         sol = nozzle_single_phase(params_model, params_solver)
         max_mach = jnp.max(sol.ys["Ma"])
-        return max_mach**2  - 1.
+        return 1. - max_mach**2
         # return jnp.min(sol.ys["D"])
 
     solvers = {
@@ -275,9 +275,9 @@ if __name__ == "__main__":
 
     plt.plot(x_vals, y_vals, color = "k") 
     plt.xlabel("Inlet Mach number")
-    # plt.ylabel("1 - max(Mach)")
-    # plt.legend(loc="best", fontsize=7)
+    plt.ylabel("1 - max(Mach)")
+    plt.legend(loc="best", fontsize=7)
     fig.tight_layout(pad=1)
 
     # Show figures
-    # plt.show()
+    plt.show()

@@ -1,0 +1,1 @@
+The real_gas_prop function is still in use as the derivatives needed for the new matrixes are not implemented in the other codes.

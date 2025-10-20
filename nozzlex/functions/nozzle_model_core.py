@@ -7,7 +7,7 @@ import jaxprop as jxp
 def nozzle_single_phase_core(t, y, args):
     """Wrapper that adapts from (t, y) to autonomous form."""
     Y = jnp.concatenate([jnp.atleast_1d(t), y])
-    return nozzle_single_phase_autonomous(0.0, Y, args)
+    return nozzle_single_phase_autonomous_ph(0.0, Y, args)
 
 
 def nozzle_single_phase_autonomous(tau, Y, args):
@@ -182,13 +182,21 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
     h0 = state0["h"]
 
     # --- Geometry ---
-    A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
-    # A, dAdx, perimeter, radius = args.geometry(x) # When using linear convergent divergent geometry
+    # A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
+    A, dAdx, perimeter, height, D_h = args.geometry(x, L) # When using linear convergent divergent geometry
     # diameter = 2 * radius
 
+    # # --- Wall heat transfer and friction ---
+    # Re = v * d * diameter / jnp.maximum(mu, 1e-12)
+    # f_D = get_friction_factor_haaland(Re, eps_wall, diameter)
+    # tau_w = get_wall_viscous_stress(f_D, d, v)
+    # htc = 10000*get_heat_transfer_coefficient(v, d, cp, f_D)
+    # htc = jnp.clip(htc, 0.0, 1e6)   # pick bound based on your scaling
+    # q_w = htc * (T_ext - T)
+
     # --- Wall heat transfer and friction ---
-    Re = v * d * diameter / jnp.maximum(mu, 1e-12)
-    f_D = get_friction_factor_haaland(Re, eps_wall, diameter)
+    Re = v * d * D_h / jnp.maximum(mu, 1e-12)
+    f_D = get_friction_factor_haaland(Re, eps_wall, D_h)
     tau_w = get_wall_viscous_stress(f_D, d, v)
     htc = 10000*get_heat_transfer_coefficient(v, d, cp, f_D)
     htc = jnp.clip(htc, 0.0, 1e6)   # pick bound based on your scaling
@@ -248,12 +256,14 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
         "x": x,
         "v": v,
         "d": d,
+        "h": h,
         "p": p,
         "rhs": rhs,
         "rhs_autonomous": rhs_autonomous,
         "A": A,
         "dAdx": dAdx,
-        "diameter": diameter,
+        # "diameter": diameter,
+        "diameter": height,
         "perimeter": perimeter,
         "h0": h0,
         "p0": p0,
@@ -388,52 +398,37 @@ def symmetric_nozzle_geometry(x, L, A_inlet=0.30, A_throat=0.15):
 
     return A, dAdx, perimeter, diameter
 
-# Nakagawa featurs now
+# Nakagawa geometry
 def linear_convergent_divergent_nozzle(
     x,
-    convergent_length=(83.50e-3 - 56.15e-3),
-    divergent_length=56.15e-3,
-    radius_in=5e-3,
-    radius_throat=0.12e-3,
-    radius_out=0.72e-3,
-    axisymmetric=False,
+    L,
+    L_convergent=(83.50e-3 - 56.15e-3),
+    height_in=5e-3,
+    height_throat=0.12e-3,
+    height_out=0.72e-3,
     width=3e-3,
 ):
     """
-    JAX-safe linear convergent-divergent nozzle.
-    - If axisymmetric=True: A = pi r^2
-    - Else (planar):       A = 2 r * width
-    Uses JAX control flow to avoid TracerBoolConversionError.
-    Returns: (A, dAdx, perimeter, radius) with shapes matching x.
+    JAX-safe linear convergent–divergent nozzle (planar geometry).
+    Uses jax.lax.cond (JAX's version of 'if') so only the active branch runs.
+    Returns (A, dAdx, perimeter, height).
     """
-    x = jnp.asarray(x)
+    L_divergent = L - L_convergent
 
-    if axisymmetric:  
-        area_in     = jnp.pi * radius_in**2
-        area_throat = jnp.pi * radius_throat**2
-        area_out    = jnp.pi * radius_out**2
-    else:
-        area_in     = 2.0 * radius_in * width
-        area_throat = 2.0 * radius_throat * width
-        area_out    = 2.0 * radius_out * width
+    def convergent(x_):
+        h = height_in + (height_throat - height_in) * x_ / L_convergent
+        A = 2.0 * h * width
+        dAdx = 2.0 * width * (height_throat - height_in) / L_convergent
+        return A, dAdx, h
 
-    dAdx_conv = (area_throat - area_in) / convergent_length
-    dAdx_div  = (area_out    - area_throat) / divergent_length
+    def divergent(x_):
+        h = height_throat + (height_out - height_throat) * (x_ - L_convergent) / L_divergent
+        A = 2.0 * h * width
+        dAdx = 2.0 * width * (height_out - height_throat) / L_divergent
+        return A, dAdx, h
 
-    # JAX piecewise selection based on x
-    cond = x <= convergent_length
-    A    = jnp.where(cond,
-                     area_in + dAdx_conv * x,
-                     area_throat + dAdx_div * (x - convergent_length))
-    dAdx = jnp.where(cond, dAdx_conv, dAdx_div)
+    A, dAdx, h = jax.lax.cond(x <= L_convergent, convergent, divergent, operand=x)
+    perimeter = 2.0 * (width + 2.0 * h)
+    D_h = 4.0 * A / perimeter
 
-    if axisymmetric:
-        radius    = jnp.sqrt(A / jnp.pi)
-        perimeter = 2.0 * jnp.pi * radius
-    else:
-        radius    = A / (2.0 * width)
-        perimeter = 2.0 * (width + 2.0 * radius)
-
-    return A, dAdx, perimeter, radius
-
-
+    return A, dAdx, perimeter, h, D_h

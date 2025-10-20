@@ -85,6 +85,7 @@ class NozzleParams(eqx.Module):
     geometry: Callable = eqx.field(static=True)
     p0_in: jnp.ndarray = f64(1.0e5)       # Pa
     d0_in: jnp.ndarray = f64(1.20)        # kg/m³
+    h0_in: jnp.ndarray = f64(300e3)
     D_in: jnp.ndarray = f64(0.050)        # m
     length: jnp.ndarray = f64(5.00)       # m
     roughness: jnp.ndarray = f64(1e-6)    # m
@@ -553,9 +554,9 @@ def chebyshev_lobatto_interpolate_and_derivative(x_nodes, y_nodes, x_eval):
 
 
 # ---------- Compute static state from stagnation and Mach number ----------
-def compute_static_state(p0, d0, Ma, fluid):
-    st0 = fluid.get_state(jxp.DmassP_INPUTS, d0, p0)
-    s0, h0 = st0["s"], st0["h"]
+def compute_static_state(p0, h0, Ma, fluid):
+    st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
+    s0 = st0["s"]
 
     # Scalar residual for Bisection
     def residual(p, _):
@@ -563,9 +564,9 @@ def compute_static_state(p0, d0, Ma, fluid):
         a, h = st["a"], st["h"]
         return h0 - h - 0.5 * (a * Ma)**2
 
-    solver = optx.Bisection(rtol=1e-3, atol=1e-3)
-    lower, upper = 0.4 * p0, p0
-    sol = optx.root_find(residual, solver, y0=0.99 * p0, options={"lower": lower, "upper": upper})
+    solver = optx.Bisection(rtol=1e-6, atol=1e-6)
+    lower, upper = 0.05 * p0, p0
+    sol = optx.root_find(residual, solver, y0=0.5*p0, options={"lower": lower, "upper": upper})
     state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
     return state
 
@@ -578,7 +579,7 @@ def nozzle_single_phase(params_model, params_solver):
     # --- inlet state ---
     state_in = compute_static_state(
         params_model.p0_in,
-        params_model.d0_in,
+        params_model.h0_in,
         params_model.Ma_in,
         params_model.fluid,
     )
@@ -607,7 +608,7 @@ def nozzle_single_phase(params_model, params_solver):
 
     event = dfx.Event(
         cond_fn=eval_end_of_domain_event,
-        root_finder=optx.Bisection(rtol=1e-10, atol=1e-10),
+        root_finder=optx.Bisection(rtol=1e-8, atol=1e-8),
     )
 
     # --- first solve (find domain end) ---
@@ -671,11 +672,12 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
         pm = replace_param(params_model, "Ma_in", Mach_in)
         sol = nozzle_single_phase(pm, params_solver)
         max_mach = jnp.max(sol.ys["Ma"])
-        return 1.0 - max_mach
+        return 1.0 - max_mach**2
 
     # Use JAX-safe Bisection
     solver = optx.Bisection(rtol=1e-3, atol=1e-3)
-    x0_initial = 0.5 * (Ma_lower + Ma_upper)
+    # x0_initial = 0.5 * (Ma_lower + Ma_upper)
+    x0_initial = Ma_upper
 
     # JAX-friendly root find (do not convert to float inside trace)
     sol_root = optx.root_find(

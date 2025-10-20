@@ -94,7 +94,7 @@ def eval_ode_rhs(t, y, _):
 # Event: stop when Ma^2 - 1 < tol
 def _sonic_event_cond(t, y, args, **kwargs):
     v, rho, p = y
-    a = args.fluid.get_props(jxp.DmassP_INPUTS, rho, p)["a"]
+    a = args.fluid.get_state(jxp.DmassP_INPUTS, rho, p)["a"]
     Ma_sqr = (v / a) ** 2
     margin = 1e-5
     return Ma_sqr - (1.0 - margin)
