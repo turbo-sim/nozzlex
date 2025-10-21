@@ -45,7 +45,7 @@ def transonic_nozzle_single_phase(
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    Ma_in_cr = compute_critical_inlet(Ma_lower=1e-3, Ma_upper=0.9, params_model=params_model, params_solver=params_ivp)
+    Ma_in_cr = compute_critical_inlet(Ma_lower=0.01, Ma_upper=0.5, params_model=params_model, params_solver=params_ivp)
 
     state_in = compute_static_state(
         params_model.p0_in,
@@ -194,16 +194,16 @@ if __name__ == "__main__":
         Ma_high=1.025,
         heat_transfer=0.0,
         wall_friction=0.0,
-        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
-        # fluid=jxp.FluidJAX(name="air"),
-        fluid = jxp.FluidBicubic(fluid_name=fluid_name,
-                                 backend="HEOS",
-                                 h_max=h_max,
-                                 h_min=h_min,
-                                 p_min=p_min,
-                                 p_max=p_max,
-                                 N_h=N_h,
-                                 N_p=N_p),
+        # fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
+        fluid=jxp.FluidJAX(name="CO2"),
+        # fluid = jxp.FluidBicubic(fluid_name=fluid_name,
+        #                          backend="HEOS",
+        #                          h_max=h_max,
+        #                          h_min=h_min,
+        #                          p_min=p_min,
+        #                          p_max=p_max,
+        #                          N_h=N_h,
+        #                          N_p=N_p),
         geometry=linear_convergent_divergent_nozzle,
     )
 

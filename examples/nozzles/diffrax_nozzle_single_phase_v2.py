@@ -18,7 +18,7 @@ from matplotlib import gridspec
 jxp.set_plot_options(grid=False)
 
 from nozzlex.functions import (
-    nozzle_single_phase_autonomous,
+    nozzle_single_phase_autonomous_ph,
     symmetric_nozzle_geometry,
     NozzleParams,
     IVPSettings,
@@ -46,14 +46,14 @@ def nozzle_single_phase(
     # Compute inlet conditions iteratively
     state_in = compute_static_state(
         params_model.p0_in,
-        params_model.d0_in,
+        params_model.h0_in,
         params_model.Ma_in,
         params_model.fluid,
     )
-    p_in, rho_in, a_in = state_in["p"], state_in["rho"], state_in["a"]
+    p_in, rho_in, a_in, h_in = state_in["p"], state_in["rho"], state_in["a"], state_in["h"]
     v_in = params_model.Ma_in * a_in
     x_in = 1e-9  # Start slightly after the nozzle inlet
-    y0 = jnp.array([x_in, v_in, rho_in, p_in])
+    y0 = jnp.array([x_in, p_in, v_in, h_in])
 
     # Create and configure the solver
     t0 = 0.0  # Start at tau=0 (arbitrary)
@@ -106,11 +106,11 @@ def nozzle_single_phase(
 
 # Define ODE RHS functions
 def eval_ode_full(t, y, args):
-    return nozzle_single_phase_autonomous(t, y, args)
+    return nozzle_single_phase_autonomous_ph(t, y, args)
 
 
 def eval_ode_rhs(t, y, args):
-    return nozzle_single_phase_autonomous(t, y, args)["rhs_autonomous"]
+    return nozzle_single_phase_autonomous_ph(t, y, args)["rhs_autonomous"]
 
 
 # Event: stop when position reaches either end of the domain [0, L]
@@ -156,6 +156,7 @@ if __name__ == "__main__":
         Ma_in=0.25,
         p0_in=1.0e5,  # Pa
         d0_in=1.20,  # kg/m³
+        h0_in=292e3,
         D_in=0.050,  # m
         length=5.00,  # m
         roughness=1e-6,  # m

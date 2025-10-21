@@ -23,3 +23,8 @@ from .graphics import *
 from . import duct_modeling
 from . import functions
 from . import functions_old
+from . import delayed_equilibrium
+from . import homogeneous_equilibrium
+from . import homogeneous_nonequilibrium
+from . import homogeneous_relaxation
+from . import two_fluid

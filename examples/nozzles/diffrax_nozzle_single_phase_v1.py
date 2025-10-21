@@ -42,13 +42,13 @@ def nozzle_single_phase(
     # Compute inlet conditions iteratively
     state_in = compute_static_state(
         params_model.p0_in,
-        params_model.d0_in,
+        params_model.h0_in,
         params_model.Ma_in,
         params_model.fluid,
     )
-    p_in, rho_in, a_in = state_in["p"], state_in["rho"], state_in["a"]
+    p_in, rho_in, a_in, h_in = state_in["p"], state_in["rho"], state_in["a"], state_in["h"]
     v_in = params_model.Ma_in * a_in
-    y0 = jnp.array([v_in, rho_in, p_in])
+    y0 = jnp.array([p_in, v_in, h_in])
 
     # Create and configure the solver
     solver = jxp.make_diffrax_solver(params_solver.solver_name)
@@ -109,6 +109,7 @@ if __name__ == "__main__":
     args = NozzleParams(
         Ma_in=0.25,
         p0_in=1.0e5,  # Pa
+        h0_in = 292e3,
         d0_in=1.20,  # kg/m³
         D_in=0.050,  # m
         length=5.00,  # m
@@ -116,8 +117,8 @@ if __name__ == "__main__":
         T_wall=300.0,  # K
         heat_transfer=0.0,
         wall_friction=0.0,
-        fluid=jxp.FluidJAX(name="air", backend="HEOS"),
-        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
+        # fluid=jxp.FluidJAX(name="air", backend="HEOS"),
+        fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
         geometry=symmetric_nozzle_geometry,
     )
 

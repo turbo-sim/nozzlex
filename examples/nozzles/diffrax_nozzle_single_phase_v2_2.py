@@ -48,7 +48,7 @@ def nozzle_single_phase(
     # Compute inlet conditions iteratively
     state_in = compute_static_state(
         params_model.p0_in,
-        params_model.d0_in,
+        params_model.h0_in,
         params_model.Ma_in,
         params_model.fluid,
     )
@@ -141,14 +141,15 @@ if __name__ == "__main__":
         Ma_in=0.25,
         p0_in=60e5,  # Pa
         d0_in=139.114,  # kg/m³
+        h0_in=463537.23,
         D_in=0.050,  # m
         length=5.00,  # m
         roughness=1e-6,  # m
         T_wall=300.0,  # K
         heat_transfer=0.0,
         wall_friction=0.0,
-        # fluid=jxp.FluidPerfectGas("CO2"),
-        fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
+        fluid=jxp.FluidPerfectGas("CO2"),
+        # fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
         # fluid = jxp.FluidBicubic(
         #     fluid_name = fluid_name,
         #     h_min=h_min,

@@ -54,7 +54,7 @@ def nozzle_single_phase_autonomous(tau, Y, args):
     d0 = state0["d"]
 
     # --- Geometry ---
-    A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
+    A, dAdx, perimeter, diameter, D_h= args.geometry(x, L) # When using symmetric geometry
     # A, dAdx, perimeter, radius = args.geometry(x) # When using linear convergent divergent geometry
     # diameter = 2 * radius
 
@@ -395,8 +395,9 @@ def symmetric_nozzle_geometry(x, L, A_inlet=0.30, A_throat=0.15):
     radius = jnp.sqrt(A / jnp.pi)          # m
     diameter = 2.0 * radius                # m
     perimeter = jnp.pi * diameter          # m
+    D_h = 4.0 * A / perimeter
 
-    return A, dAdx, perimeter, diameter
+    return A, dAdx, perimeter, diameter, D_h
 
 # Nakagawa geometry
 def linear_convergent_divergent_nozzle(
