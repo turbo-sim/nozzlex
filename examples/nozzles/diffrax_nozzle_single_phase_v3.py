@@ -45,7 +45,7 @@ def transonic_nozzle_single_phase(
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    Ma_in_cr = compute_critical_inlet(Ma_lower=0.01, Ma_upper=0.5, params_model=params_model, params_solver=params_ivp)
+    Ma_in_cr = compute_critical_inlet(Ma_lower=0.01, Ma_upper=0.4, params_model=params_model, params_solver=params_ivp)
 
     state_in = compute_static_state(
         params_model.p0_in,
@@ -167,12 +167,12 @@ def _smoothstep(x):
 outdir = "fluid_tables"
 fluid_name = "CO2"
 backend = "HEOS"
-h_min = 40e3  # J/kg
-h_max = 450e3  # J/kg
+h_min = 10e3  # J/kg
+h_max = 550e3  # J/kg
 p_min = 1e5    # Pa
 p_max = 120e5   # Pa
-N_h = 150
-N_p = 150
+N_h = 50
+N_p = 50
 
 if __name__ == "__main__":
 
@@ -183,11 +183,10 @@ if __name__ == "__main__":
     # -- 1. Find critical state with continuation --
 
     params_model = NozzleParams(
-        p0_in=91e5,  # Pa 
-        d0_in=621.47,  # kg/m³
-        h0_in=310004.694,
-        D_in=0.050,  # m
-        length=5.00,  # m
+        p0_in=100e5,  # Pa 
+        h0_in=500e3,
+        # D_in=0.050,  # m
+        # length=5.00,  # m
         roughness=1e-6,  # m
         T_wall=300.0,  # K
         Ma_low=0.95,
@@ -195,15 +194,15 @@ if __name__ == "__main__":
         heat_transfer=0.0,
         wall_friction=0.0,
         # fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
-        fluid=jxp.FluidJAX(name="CO2"),
-        # fluid = jxp.FluidBicubic(fluid_name=fluid_name,
-        #                          backend="HEOS",
-        #                          h_max=h_max,
-        #                          h_min=h_min,
-        #                          p_min=p_min,
-        #                          p_max=p_max,
-        #                          N_h=N_h,
-        #                          N_p=N_p),
+        # fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
+        fluid = jxp.FluidBicubic(fluid_name=fluid_name,
+                                 backend="HEOS",
+                                 h_max=h_max,
+                                 h_min=h_min,
+                                 p_min=p_min,
+                                 p_max=p_max,
+                                 N_h=N_h,
+                                 N_p=N_p),
         geometry=linear_convergent_divergent_nozzle,
     )
 
@@ -224,8 +223,8 @@ if __name__ == "__main__":
         solver_name="Dopri5",
         adjoint_name="DirectAdjoint",
         number_of_points=50,
-        rtol=1e-8,
-        atol=1e-8,
+        rtol=1e-7,
+        atol=1e-7,
     )
 
     L_nakagawa = 83.50e-3
@@ -236,7 +235,7 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([91]) * 1e5
+    input_array = jnp.asarray([100, 95, 90]) * 1e5
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, p0_in in enumerate(input_array):
@@ -323,28 +322,3 @@ if __name__ == "__main__":
 
     # Show figures
     plt.show()
-
-    # # --- Differentiability check: mdot vs. p0_in ---
-    # def mdot_vs_p0(p0_in):
-    #     num_points = 50
-    #     local_params = replace_param(params_model, "p0_in", p0_in)
-    #     sol = transonic_nozzle_single_phase(local_params, params_bvp, params_ivp, fluid)
-    #     return sol.ys["m_dot"][0]
-
-    # # Base point
-    # p0_in = 101325.0
-
-    # # JAX derivative
-    # mdot_val = mdot_vs_p0(p0_in)
-    # mdot_grad = jax.grad(mdot_vs_p0)(p0_in)
-
-    # # Finite difference derivative
-    # h = 1.0  # small perturbation in Pa
-    # fd_grad = (mdot_vs_p0(p0_in + h) - mdot_vs_p0(p0_in - h)) / (2 * h)
-
-    # # Print results
-    # print()
-    # print(f" mdot(p0_in={p0_in:.3f}) = {mdot_val:.6e}")
-    # print(f" JAX   d(mdot)/d(p0_in) = {mdot_grad:.6e}")
-    # print(f" FD    d(mdot)/d(p0_in) = {fd_grad:.6e}")
-    # print(f" Relative diff = {abs((mdot_grad - fd_grad) / fd_grad):.3e}")

@@ -114,37 +114,46 @@ def eval_ode_rhs(t, y, args):
 
 
 # Event: stop when position reaches either end of the domain [0, L]
+# def eval_end_of_domain_event(t, y, args, **kwargs):
+#     x = y[0]
+#     L = params_model.length
+#     return jnp.minimum(x, L - x)
+
 def eval_end_of_domain_event(t, y, args, **kwargs):
-    x = y[0]
-    L = params_model.length
-    return jnp.minimum(x, L - x)
+    L = args.length
 
+    # Unpack variables
+    x, p, v, h = y
+    fluid = args.fluid
 
-# JAX-compatible cubic Hermite interpolation
-def jax_cubic_spline(x, x_vals, y_vals):
-    """
-    Piecewise cubic Hermite spline approximation (JAX-compatible)
-    """
-    # Find interval indices (clip to valid range)
-    idx = jnp.clip(jnp.searchsorted(x_vals, x) - 1, 0, len(x_vals)-2)
-    
-    x0 = x_vals[idx]
-    x1 = x_vals[idx+1]
-    y0 = y_vals[idx]
-    y1 = y_vals[idx+1]
-    
-    # Linear slope (simple Hermite approximation)
-    m = (y1 - y0) / (x1 - x0 + 1e-12)  # avoid div by zero
-    t = (x - x0) / (x1 - x0 + 1e-12)
-    
-    # Cubic Hermite polynomial: h00 = 2t^3 - 3t^2 + 1, h10 = t^3 - 2t^2 + t
-    h00 = 2*t**3 - 3*t**2 + 1
-    h10 = t**3 - 2*t**2 + t
-    
-    return h00*y0 + (x1 - x0)*h10*m + (1 - h00)*y1
+    # Compute determinant D
+    state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
+    a = state["a"]
+    d = state["rho"]
+    G = state["gruneisen"]
 
-def spline_func(x, args=None):
-    return jnp.interp(x, x_vals, y_vals)
+    dddp = (1 + G) / a**2
+    dddh = - (d * G) / a**2
+
+    A_mat = jnp.array([
+        [v * dddp, d, v * dddh],
+        [1.0, d * v, 0.0],
+        [v, 0.0, -d * v],
+    ])
+
+    D = jnp.linalg.det(A_mat)
+
+    # Two event conditions:
+    # 1. Domain end: L - x
+    # 2. Determinant-negative condition: 0.2 - x (active only if D < 0)
+    cond_1 = L - x
+    # cond_2 = jnp.where(D < 0, x - 0.3, 1e9)
+    cond_2 = 1.2 -v/a
+
+    # Trigger when either becomes zero
+    val = jnp.minimum(cond_1, cond_2)
+
+    return val
 
 # -----------------------------------------------------------------------------
 # Converging-diverging nozzle example
@@ -163,8 +172,8 @@ if __name__ == "__main__":
         T_wall=300.0,  # K
         heat_transfer=0.0,
         wall_friction=0.0,
-        fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
-        # fluid=jxp.FluidJAX(name="air", backend="HEOS"),
+        # fluid=jxp.FluidPerfectGas("air", T_ref=300, p_ref=101325),
+        fluid=jxp.FluidJAX(name="air", backend="HEOS"),
         geometry=symmetric_nozzle_geometry,
     )
 
@@ -230,6 +239,7 @@ if __name__ == "__main__":
         params_model = replace_param(params_model, "Ma_in", Mach_in)
         sol = nozzle_single_phase(params_model, params_solver)
         max_mach = jnp.max(sol.ys["Ma"])
+        jax.debug.print("1-mach = {}", 1-max_mach)
         return 1. - max_mach**2
         # return jnp.min(sol.ys["D"])
 
