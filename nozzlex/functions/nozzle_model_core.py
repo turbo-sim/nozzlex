@@ -144,7 +144,7 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
         dx/dt   = det(A)
         dy_i/dt = det(A with column i replaced by b)
 
-    State vector: Y = [x, v, rho, p]
+    State vector: Y = [x, p, v, h]
     """
     x, p, v, h = Y
 
@@ -163,6 +163,8 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
     # --- Thermodynamic state ---
     # d = jnp.clip(d, 1e-10, 1e6)  # enforce valid density range
     # p = jnp.clip(p, 1e2, 1e9)   # enforce valid pressure range
+    # jax.debug.print("h = {}", h)
+    # jax.debug.print("x = {}", x)
 
     state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
     T = state["T"]
@@ -232,6 +234,9 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
             -v * tau_w * perimeter / A,
         ]
     )
+    S = d **(1/3)
+    A_mat = A_mat / S 
+    b_vec = b_vec / S
 
     # --- Determinants ---
     D = jnp.linalg.det(A_mat)
