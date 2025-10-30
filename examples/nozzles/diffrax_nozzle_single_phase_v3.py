@@ -275,7 +275,7 @@ if __name__ == "__main__":
     axs[0].set_ylabel("Pressure (bar)")
     for color, val, sol in zip(colors, input_array, solution_list):
         x = sol.ys["x"]
-        axs[0].plot(x, sol.ys["p0"] * 1e-5, linestyle="--", color=color)
+        # axs[0].plot(x, sol.ys["p0"] * 1e-5, linestyle="--", color=color)
         axs[0].plot(
             x,
             sol.ys["p"] * 1e-5,
