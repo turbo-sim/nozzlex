@@ -22,8 +22,8 @@ from .graphics import *
 # Import subpackages
 from . import duct_modeling
 from . import functions
-from . import functions_old
-from . import delayed_equilibrium
+# from . import functions_old
+# from . import delayed_equilibrium
 from . import homogeneous_equilibrium
 from . import homogeneous_nonequilibrium
 from . import homogeneous_relaxation
