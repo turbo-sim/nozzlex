@@ -177,11 +177,11 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
 
     # Stagnation state
     h0 = state["h"] + 0.5 * v**2
-    state0 = fluid.get_state(jxp.HmassSmass_INPUTS, h0, state["s"])
-    p0 = state0["p"]
-    T0 = state0["T"]
-    d0 = state0["d"]
-    h0 = state0["h"]
+    # state0 = fluid.get_state(jxp.HmassSmass_INPUTS, h0, state["s"])
+    # p0 = state0["p"]
+    # T0 = state0["T"]
+    # d0 = state0["d"]
+    # h0 = state0["h"]
 
     # --- Geometry ---
     # A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
@@ -271,9 +271,9 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
         "diameter": height,
         "perimeter": perimeter,
         "h0": h0,
-        "p0": p0,
-        "T0": T0,
-        "d0": d0,
+        # "p0": p0,
+        # "T0": T0,
+        # "d0": d0,
         "Ma": v / state["a"],
         "Re": Re,
         "f_D": f_D,

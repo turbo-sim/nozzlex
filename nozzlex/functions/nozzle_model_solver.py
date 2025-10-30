@@ -552,24 +552,52 @@ def chebyshev_lobatto_interpolate_and_derivative(x_nodes, y_nodes, x_eval):
         return jax.vmap(_scalar_interp_and_deriv)(x_eval)
 
 
-
-# ---------- Compute static state from stagnation and Mach number ----------
 def compute_static_state(p0, h0, Ma, fluid):
+    # --- Reference stagnation state ---
     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
     s0 = st0["s"]
 
-    # Scalar residual for Bisection
-    def residual(p, _):
-        st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
-        a, h = st["a"], st["h"]
-        return h0 - h - 0.5 * (a * Ma)**2
+    # --- Define residual system: f(p, h) = [f1, f2] ---
+    def residual(x, _):
+        p, h = x
+        st = fluid.get_state(jxp.HmassP_INPUTS, h, p)
+        a, s = st["a"], st["s"]
 
-    solver = optx.Newton(rtol=1e-3, atol=1e-3)
-    lower, upper = 0.2 * p0, p0
-    # sol = optx.root_find(residual, solver, y0=p0, options={"lower": lower, "upper": upper})
-    sol = optx.root_find(residual, solver, y0=0.95* p0)
-    state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
+        f1 = 1.0 - (h + 0.5 * (a * Ma) ** 2) / h0   # energy balance
+        f2 = s/s0 - 1.0                             # isentropic condition
+        return jnp.array([f1, f2])
+
+    # --- Initial guess ---
+    # start slightly below stagnation pressure, same enthalpy
+    x0 = jnp.array([p0, h0])
+
+    # --- Solve ---
+    solver = optx.Newton(rtol=1e-4, atol=1e-4)
+    sol = optx.root_find(residual, solver, y0=x0)
+
+    # --- Evaluate final state ---
+    p, h = sol.value
+    state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
     return state
+
+
+# # ---------- Compute static state from stagnation and Mach number ----------
+# def compute_static_state(p0, h0, Ma, fluid):
+#     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
+#     s0 = st0["s"]
+
+#     # Scalar residual for Bisection
+#     def residual(p, _):
+#         st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
+#         a, h = st["a"], st["h"]
+#         return h0 - h - 0.5 * (a * Ma)**2
+
+#     solver = optx.Newton(rtol=1e-3, atol=1e-3)
+#     lower, upper = 0.2 * p0, p0
+#     # sol = optx.root_find(residual, solver, y0=p0, options={"lower": lower, "upper": upper})
+#     sol = optx.root_find(residual, solver, y0=0.95* p0)
+#     state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
+#     return state
 
 # def compute_static_state(p0, h0, Ma, fluid):
 #     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
