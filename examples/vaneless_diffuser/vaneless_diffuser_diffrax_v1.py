@@ -44,7 +44,7 @@ def vaneless_diffuser(
 
     # Compute initial conditions for ODE system
     p_in, s_in = compute_inlet_static_state(p0_in, T0_in, Ma_in, fluid)
-    state = fluid.get_props(jxp.PSmass_INPUTS, p_in, s_in)
+    state = fluid.get_state(jxp.PSmass_INPUTS, p_in, s_in)
     d_in = state["rho"]
     a_in = state["a"]
     v_in = Ma_in * a_in
@@ -105,7 +105,7 @@ def diffuser_odefun(t, y, args):
     dAdr = area_grad(length, b_in, div, r_in, phi)
 
     # Calculate thermodynamic state
-    state = fluid.get_props(jxp.DmassP_INPUTS, d, p)
+    state = fluid.get_state(jxp.DmassP_INPUTS, d, p)
     a = state["a"]
     h = state["h"]
     s = state["s"]
@@ -150,7 +150,7 @@ def postprocess_ode(t, y, args):
     Cf, q_w, r_in, b_in, phi, div, p0_in, p_in, fluid = args
     v_m, v_t, d, p, s_gen, theta = y
     v = jnp.sqrt(v_t**2 + v_m**2)
-    state = fluid.get_props(jxp.DmassP_INPUTS, d, p)
+    state = fluid.get_state(jxp.DmassP_INPUTS, d, p)
     a = state["a"]
     r = radius_fun(r_in, phi, t)
     b = width_fun(b_in, div, t)
@@ -226,13 +226,13 @@ def compute_inlet_static_state(p0, T0, Ma, fluid):
     """
 
     # Compute stagnation state properties
-    state0 = fluid.get_props(jxp.PT_INPUTS, p0, T0)
+    state0 = fluid.get_state(jxp.PT_INPUTS, p0, T0)
     s0, h0 = state0["s"], state0["h"]
 
     # Residual function for root find
     def residual(p, _):
         # f(p) = h0 - h(p,s0) - 0.5 a(p,s0)^2 Ma^2
-        state = fluid.get_props(jxp.PSmass_INPUTS, p, s0)
+        state = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
         a, h = state["a"], state["h"]
         v = a * Ma
         return h0 - h - 0.5 * v * v
