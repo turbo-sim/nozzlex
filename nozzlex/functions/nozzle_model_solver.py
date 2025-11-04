@@ -96,6 +96,7 @@ class NozzleParams(eqx.Module):
     Ma_target: jnp.ndarray = f64(1.0)
     heat_transfer: jnp.ndarray = f64(0.0)
     wall_friction: jnp.ndarray = f64(0.0)
+    p_termination: jnp.ndarray = f64(0.0)
 
 
 class BVPSettings(eqx.Module):
@@ -562,17 +563,16 @@ def compute_static_state(p0, h0, Ma, fluid):
         p, h = x
         st = fluid.get_state(jxp.HmassP_INPUTS, h, p)
         a, s = st["a"], st["s"]
-
         f1 = 1.0 - (h + 0.5 * (a * Ma) ** 2) / h0   # energy balance
         f2 = s/s0 - 1.0                             # isentropic condition
         return jnp.array([f1, f2])
 
     # --- Initial guess ---
     # start slightly below stagnation pressure, same enthalpy
-    x0 = jnp.array([p0, h0])
+    x0 = jnp.array([0.95*p0, 0.95*h0])
 
     # --- Solve ---
-    solver = optx.Newton(rtol=1e-4, atol=1e-4)
+    solver = optx.GaussNewton(rtol=1e-3, atol=1e-3)
     sol = optx.root_find(residual, solver, y0=x0)
 
     # --- Evaluate final state ---
@@ -696,6 +696,9 @@ def eval_end_of_domain_event(t, y, args, **kwargs):
 
     # Unpack variables
     x, p, v, h = y
+
+    # jax.debug.print("x = {x:.3e}, p = {p:.6e}", x=x, p=p)
+
     fluid = args.fluid
 
     # Compute determinant D

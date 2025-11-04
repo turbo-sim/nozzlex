@@ -268,8 +268,8 @@ if __name__ == "__main__":
     # -- 1. Find critical state with continuation --
 
     params_model = NozzleParams(
-        p0_in=91e5,  # Pa 
-        h0_in=310.004e3,
+        p0_in=100e5,  # Pa 
+        h0_in=500e3,
         # D_in=0.050,  # m
         # length=5.00,  # m
         roughness=1e-6,  # m
@@ -278,16 +278,16 @@ if __name__ == "__main__":
         Ma_high=1.025,
         heat_transfer=0.0,
         wall_friction=0.0,
-        # fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
+        fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
         # fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
-        fluid = jxp.FluidBicubic(fluid_name=fluid_name,
-                                 backend="HEOS",
-                                 h_max=h_max,
-                                 h_min=h_min,
-                                 p_min=p_min,
-                                 p_max=p_max,
-                                 N_h=N_h,
-                                 N_p=N_p),
+        # fluid = jxp.FluidBicubic(fluid_name=fluid_name,
+        #                          backend="HEOS",
+        #                          h_max=h_max,
+        #                          h_min=h_min,
+        #                          p_min=p_min,
+        #                          p_max=p_max,
+        #                          N_h=N_h,
+        #                          N_p=N_p),
         geometry=linear_convergent_divergent_nozzle,
     )
     L_nakagawa = 83.50e-3
@@ -299,7 +299,7 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Running inlet Mach number sensitivity analysis")
     print("-" * 60)
-    input_array = jnp.linspace(0.012, 0.016, 10)
+    input_array = jnp.linspace(0.012, 0.016, 100)
     # input_array = (0.001, 0.01, 0.5)
 
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
@@ -327,7 +327,7 @@ if __name__ == "__main__":
     axs[0].set_ylabel("Pressure (bar)")
     for color, val, sol in zip(colors, input_array, solution_list):
         x = sol["x"]
-        axs[0].plot(x, sol["p0"] * 1e-5, linestyle="--", color=color)
+        # axs[0].plot(x, sol["p0"] * 1e-5, linestyle="--", color=color)
         axs[0].plot(
             x,
             sol["p"] * 1e-5,

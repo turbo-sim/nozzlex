@@ -45,7 +45,7 @@ def transonic_nozzle_single_phase(
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    Ma_in_cr = compute_critical_inlet(Ma_lower=0.01, Ma_upper=0.4, params_model=params_model, params_solver=params_ivp)
+    Ma_in_cr = compute_critical_inlet(Ma_lower=0.001, Ma_upper=0.4, params_model=params_model, params_solver=params_ivp)
 
     state_in = compute_static_state(
         params_model.p0_in,
@@ -115,6 +115,12 @@ def transonic_nozzle_single_phase(
         return ode_full_transonic(t, y, args)["rhs_blend"]
 
     # --- 4. Second pass ---
+
+    event_low_pressure = dfx.Event(
+        cond_fn=_low_pressure_event_cond,
+        root_finder=optx.Bisection(rtol=1e-6, atol=1e-6),
+    )
+
     # TODO, perhaps it is more robust to do 1 pass for each segment instead of attempting a single pass?
     ts2 = jnp.linspace(1e-9, params_model.length, params_ivp.number_of_points)
     term2 = dfx.ODETerm(ode_rhs_transonic)
@@ -131,6 +137,7 @@ def transonic_nozzle_single_phase(
         stepsize_controller=ctrl,
         adjoint=adjoint,
         max_steps=20_000,
+        event=event_low_pressure,
     )
 
     return sol2
@@ -143,6 +150,13 @@ def _mach_event_cond(t, y, args, **kwargs):
     Ma_sqr = (v / a)**2
     return Ma_sqr - args.Ma_low**2
 
+def _low_pressure_event_cond(t, y, args, **kwargs):
+    """Event function: avoid too long pressures"""
+    p, v, h = y
+    cond = p - args.p_termination
+    # jax.debug.print("t = {t:.3e}, p = {p:.6e}, cond = {cond:.6e}", t=t, p=p, cond=cond)
+
+    return cond
 
 def _linearize_rhs_at(x_star, y_star, model):
     """Return Taylor expansion coefficients of RHS around (x_star, y_star)."""
@@ -169,10 +183,10 @@ fluid_name = "CO2"
 backend = "HEOS"
 h_min = 10e3  # J/kg
 h_max = 550e3  # J/kg
-p_min = 1e5    # Pa
-p_max = 120e5   # Pa
-N_h = 50
-N_p = 50
+p_min = 7e5    # Pa
+p_max = 150e5   # Pa
+N_h = 60
+N_p = 60
 
 if __name__ == "__main__":
 
@@ -183,8 +197,8 @@ if __name__ == "__main__":
     # -- 1. Find critical state with continuation --
 
     params_model = NozzleParams(
-        p0_in=100e5,  # Pa 
-        h0_in=500e3,
+        p0_in=91e5,  # Pa 
+        h0_in=310.0047e3,
         # D_in=0.050,  # m
         # length=5.00,  # m
         roughness=1e-6,  # m
@@ -193,6 +207,7 @@ if __name__ == "__main__":
         Ma_high=1.025,
         heat_transfer=0.0,
         wall_friction=0.0,
+        p_termination=p_min,
         # fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
         # fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
         fluid = jxp.FluidBicubic(fluid_name=fluid_name,
@@ -222,9 +237,9 @@ if __name__ == "__main__":
     params_ivp = IVPSettings(
         solver_name="Dopri5",
         adjoint_name="DirectAdjoint",
-        number_of_points=50,
-        rtol=1e-7,
-        atol=1e-7,
+        number_of_points=200,
+        rtol=1e-8,
+        atol=1e-8,
     )
 
     L_nakagawa = 83.50e-3
@@ -235,7 +250,7 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([100, 95, 90]) * 1e5
+    input_array = jnp.asarray([92, 91, 90]) * 1e5
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, p0_in in enumerate(input_array):
@@ -305,9 +320,9 @@ if __name__ == "__main__":
         axs[2].plot(sol.ys["x"], sol.ys["h"], color=color, markersize=3, marker="o")
 
     # Entropy
-    axs[3].set_ylabel("Entropy (J/kg/K)")
+    axs[3].set_ylabel("Quality")
     for color, val, sol in zip(colors, input_array, solution_list):
-        axs[3].plot(sol.ys["x"], sol.ys["s"], color=color, markersize=3, marker="o")
+        axs[3].plot(sol.ys["x"], sol.ys["Q"], color=color, markersize=3, marker="o")
 
     # --- row 3: nozzle geometry ---
     axs[4].fill_between(xg, -rg, +rg, color="lightgrey")  # shaded nozzle
@@ -319,6 +334,12 @@ if __name__ == "__main__":
     axs[4].set_aspect("equal", adjustable="box")
     axs[4].set_xlabel("Axial coordinate x (m)")
     fig.tight_layout(pad=1)
+
+
+
+    fluid = jxp.Fluid(name="CO2", backend="HEOS")
+    fig, ax = fluid.plot_phase_diagram(x_prop="s", y_prop="T", plot_quality_isolines=True)
+    ax.plot(sol.ys["s"], sol.ys["T"], "ko")
 
     # Show figures
     plt.show()
