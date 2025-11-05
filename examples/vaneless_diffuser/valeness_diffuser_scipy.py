@@ -99,28 +99,29 @@ def evaluate_vaneless_diffuser_1d(
         theta_dot = (v_t / v_m) / r  # Streamline wrapping angle
 
         # Store data in dictionary
-        out = {"v_t" : v_t,
-               "v_m" : v_m,
-               "v" : v,
-               "Ma" : v / a,
-               "Ma_m" : v_m / a,
-               "Ma_t" : v_t / a,
-               "alpha" : alpha,
-               "d" : d,
-               "p" : p,
-               "s" : s,
-               "s_gen" : s_gen,
-               "h" : h,
-               "h0" : h0,
-               "theta" : theta,
-               "r": r,
-               "b": b,
-               "L": L,
-               "radius_ratio": r/r_in,
-               "area_ratio": (b*r)/(b_in*r_in),
-               "Cp": (p-p_in)/(p0_in-p_in),
-               }
-        
+        out = {
+            "v_t": v_t,
+            "v_m": v_m,
+            "v": v,
+            "Ma": v / a,
+            "Ma_m": v_m / a,
+            "Ma_t": v_t / a,
+            "alpha": alpha,
+            "d": d,
+            "p": p,
+            "s": s,
+            "s_gen": s_gen,
+            "h": h,
+            "h0": h0,
+            "theta": theta,
+            "r": r,
+            "b": b,
+            "L": L,
+            "radius_ratio": r / r_in,
+            "area_ratio": (b * r) / (b_in * r_in),
+            "Cp": (p - p_in) / (p0_in - p_in),
+        }
+
         return np.concatenate([core, np.array([s_gen_dot, theta_dot])]), out
 
     # Prepare integration points
@@ -128,7 +129,7 @@ def evaluate_vaneless_diffuser_1d(
 
     # Solve ODE using SciPy RK45
     ode_sol = scipy.integrate.solve_ivp(
-        fun=lambda t,y: odefun(t,y)[0],
+        fun=lambda t, y: odefun(t, y)[0],
         t_span=[0.0, L],
         y0=y0,
         method="RK45",
@@ -137,11 +138,9 @@ def evaluate_vaneless_diffuser_1d(
         t_eval=t_eval,
     )
 
-
     out = postprocess_ode(ode_sol.t, ode_sol.y, odefun)
 
     return out, ode_sol
-
 
 
 def postprocess_ode(t, y, ode_handle):
@@ -210,7 +209,9 @@ def br_fun(m, b_in, div, r_in, phi):
 
 def br_grad(m, b_in, div, r_in, phi, h=1e-8):
     """Finite-difference gradient of br_fun w.r.t. m"""
-    return (br_fun(m + h, b_in, div, r_in, phi) - br_fun(m - h, b_in, div, r_in, phi)) / (2 * h)
+    return (
+        br_fun(m + h, b_in, div, r_in, phi) - br_fun(m - h, b_in, div, r_in, phi)
+    ) / (2 * h)
 
 
 # -----------------------------------------------------------------------------
@@ -252,7 +253,7 @@ if __name__ == "__main__":
         "r_out": 3.0,
         "b_in": 0.25,
         "phi": 90 * np.pi / 180,  # pi/2 for radial channel
-        "div": 0 * np.pi / 180,   # 0 for constant width channel
+        "div": 0 * np.pi / 180,  # 0 for constant width channel
     }
 
     # Convert all parameter values to NumPy arrays
@@ -293,7 +294,7 @@ if __name__ == "__main__":
 
     # Compute diffuser performance for different friction factors
     Cf_array = np.asarray([0.0, 0.01, 0.02, 0.03])
-    colors = plt.cm.magma(np.linspace(0, 1, len(Cf_array)+1))  # Generate colors
+    colors = plt.cm.magma(np.linspace(0, 1, len(Cf_array) + 1))  # Generate colors
     for i, Cf in enumerate(Cf_array):
         params["Cf"] = Cf
         t0 = perf_counter()
@@ -301,17 +302,21 @@ if __name__ == "__main__":
         print(f"Call {i+1}: Model evaluation time: {(perf_counter()-t0)*1e3:.2f} ms")
 
         # Plot the pressure recovery coefficient distribution
-        ax_1.plot(out['radius_ratio'], out['Cp'], label=f"$C_f = {Cf:0.3f}$", color=colors[i])
-        ax_1.legend(loc='lower right')
+        ax_1.plot(
+            out["radius_ratio"], out["Cp"], label=f"$C_f = {Cf:0.3f}$", color=colors[i]
+        )
+        ax_1.legend(loc="lower right")
 
         # Plot the Mach number distribution
-        ax_2.plot(out['radius_ratio'], out['Ma'], label=f"$C_f = {Cf:0.3f}$", color=colors[i])
-        ax_2.legend(loc='upper right')
+        ax_2.plot(
+            out["radius_ratio"], out["Ma"], label=f"$C_f = {Cf:0.3f}$", color=colors[i]
+        )
+        ax_2.legend(loc="upper right")
 
         # Plot streamlines
         for j in range(len(theta)):
-            x = out['r'] * np.cos(out['theta'] + theta[j])
-            y = out['r'] * np.sin(out['theta'] + theta[j])
+            x = out["r"] * np.cos(out["theta"] + theta[j])
+            y = out["r"] * np.sin(out["theta"] + theta[j])
             if j == 0:
                 ax_3.plot(x, y, label=f"$C_f = {Cf:0.3f}$", color=colors[i])
             else:
@@ -323,11 +328,3 @@ if __name__ == "__main__":
 
     # Show plot
     plt.show()
-
-
-
-
-
-
-
-
