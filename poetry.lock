@@ -1420,6 +1420,24 @@ numpy = [
 dev = ["absl-py", "pyink", "pylint (>=2.6.0)", "pytest", "pytest-xdist"]
 
 [[package]]
+name = "mpmath"
+version = "1.3.0"
+description = "Python library for arbitrary-precision floating-point arithmetic"
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
+    {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
+]
+
+[package.extras]
+develop = ["codecov", "pycodestyle", "pytest (>=4.6)", "pytest-cov", "wheel"]
+docs = ["sphinx"]
+gmpy = ["gmpy2 (>=2.1.0a4) ; platform_python_implementation != \"PyPy\""]
+tests = ["pytest (>=4.6)"]
+
+[[package]]
 name = "mypy-extensions"
 version = "1.1.0"
 description = "Type system extensions for programs checked with the mypy type checker."
@@ -1597,27 +1615,29 @@ name = "nurbspy"
 version = "1.2.2"
 description = "A lightweight library for NURBS curves and surfaces"
 optional = false
-python-versions = "<3.14,>=3.11"
+python-versions = ">=3.11,<3.14"
 groups = ["main"]
-files = [
-    {file = "nurbspy-1.2.2-py3-none-any.whl", hash = "sha256:0c91b4ade3752d76fb58388a4b93d8cdf31ff0e080b286877fefb0d450de0688"},
-    {file = "nurbspy-1.2.2.tar.gz", hash = "sha256:b9316824b03b439cafb99d1d9802dca7f293eb33e1cec73be401e44fe417c4a9"},
-]
+files = []
+develop = true
 
 [package.dependencies]
-cycler = ">=0.12.1,<0.13.0"
-diffrax = ">=0.7.0,<0.8.0"
-equinox = ">=0.12.0,<0.13.0"
-jax = ">=0.6.0,<0.7.0"
-jaxlib = ">=0.6.0,<0.7.0"
-matplotlib = ">=3.10.6,<4.0.0"
-numba = ">=0.62.0,<0.63.0"
-numpy = ">=2.3.0,<3.0.0"
-optimistix = ">=0.0.10,<0.0.11"
-PyYAML = ">=6.0.2,<7.0.0"
-quadax = ">=0.2.10,<0.3.0"
-scipy = ">=1.16.1,<2.0.0"
-toml = ">=0.10.2,<0.11.0"
+cycler = "^0.12.1"
+diffrax = "^0.7.0"
+equinox = "^0.12.0"
+jax = "^0.6.0"
+jaxlib = "^0.6.0"
+matplotlib = "^3.10.6"
+numba = "^0.62.0"
+numpy = "^2.3.0"
+optimistix = "^0.0.10"
+PyYAML = "^6.0.2"
+quadax = "^0.2.10"
+scipy = "^1.16.1"
+toml = "^0.10.2"
+
+[package.source]
+type = "directory"
+url = "../nurbspy"
 
 [[package]]
 name = "openpyxl"
@@ -2845,6 +2865,24 @@ typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
+name = "sympy"
+version = "1.14.0"
+description = "Computer algebra system (CAS) in Python"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"},
+    {file = "sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517"},
+]
+
+[package.dependencies]
+mpmath = ">=1.1.0,<1.4"
+
+[package.extras]
+dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
+
+[[package]]
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
@@ -3199,4 +3237,4 @@ test = ["pytest (>=6.0.0)", "setuptools (>=65)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "4e144981dfcac63390712eedc22a83e19f49d40689190232255dd91e0fe65c12"
+content-hash = "6f6f1610f3bfaf01bce9ddd760b68569becc22d89359555feb6d21e1cccfd3ed"

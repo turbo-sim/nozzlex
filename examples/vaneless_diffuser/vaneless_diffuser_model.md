@@ -37,10 +37,10 @@ $$
   = -\frac{\rho v_m}{A} \frac{dA}{dm} \\
 \rho v_m \frac{dv_m}{dm} + \frac{dp}{dm}
   = \frac{\rho v_\theta^2}{r} \sin(\phi)
-     - \frac{2 \tau}{b} \cos(\alpha)  \\
+     - \frac{2 \tau_m}{b}  \\
 \rho v_m \frac{dv_\theta}{dm}
   = -\frac{\rho v_\theta v_m}{r} \sin(\phi)
-     - \frac{2 \tau}{b} \sin(\alpha) \\
+     - \frac{2 \tau_\theta}{b}  \\
 v_m \frac{dv_m}{dm} + v_\theta \frac{dv_\theta}{dm} + \frac{d h}{dm} 
   = \frac{2 \dot{q}}{b}
 \end{gather}
@@ -63,10 +63,10 @@ $$
   = -\frac{\rho}{A} \frac{d A}{dm} \\
 \rho v_m \frac{dv_m}{dm} + \frac{dp}{dm}
   = \frac{\rho v_\theta^2}{r} \sin(\phi)
-     - \frac{2 \tau}{b} \cos(\alpha)  \\
+     - \frac{2 \tau_m}{b}   \\
 \rho v_m \frac{dv_\theta}{dm}
   = -\frac{\rho v_\theta v_m}{r} \sin(\phi)
-     - \frac{2 \tau}{b} \sin(\alpha) \\
+     - \frac{2 \tau_\theta}{b}  \\
 v_m \frac{dv_m}{dm} + v_\theta \frac{dv_\theta}{dm} + \frac{d h}{dm} 
   = \frac{2 \dot{q}}{b}
 \end{gather}
@@ -97,8 +97,8 @@ p
 S =
 \begin{bmatrix}
 -\tfrac{\rho}{A}\,\tfrac{dA}{dm} \\
-\tfrac{\rho v_\theta^{2}}{r}\,\sin\phi - \tfrac{2\tau}{b}\cos\alpha  \\
--\tfrac{\rho v_\theta v_m}{r}\,\sin\phi - \tfrac{2\tau}{b}\sin\alpha \\
+\tfrac{\rho v_\theta^{2}}{r}\,\sin\phi - \tfrac{2\tau_m}{b}  \\
+-\tfrac{\rho v_\theta v_m}{r}\,\sin\phi - \tfrac{2\tau_\theta}{b} \\
 \tfrac{2\,\dot q_w}{b}
 \end{bmatrix}.
 $$
@@ -118,20 +118,20 @@ $$
 \begin{gather}
   \rho v_m \frac{d}{dm}\left(\frac{v_m^2}{2}\right) + v_m\frac{dp}{dm}
   = \frac{\rho v_\theta^2 v_m}{r} \sin(\phi)
-     - \frac{2 \tau}{b} v_m \cos(\alpha)  \\[4pt]
+     - \frac{2}{b} \tau_m v_m   \\[4pt]
 \rho v_m \frac{d}{dm} \left(\frac{v_\theta^2}{2}\right)
   = -\frac{\rho v_\theta^2 v_m}{r} \sin(\phi)
-     - \frac{2 \tau}{b} v_\theta \sin(\alpha)
+     - \frac{2}{b} \tau_\theta v_\theta 
 \end{gather}
 $$
-Adding both equations and noting that $v_m = v \cos \alpha$ and $v_\theta = v \sin \alpha$, we obtain:
+Adding both equations we obtain:
 $$
 v_m \left( \frac{dp}{dm} + \rho \frac{d}{dm}\left(\frac{v_m^2}{2} + \frac{v_\theta^2}{2} \right) \right)
 = v_m \left( \frac{dp}{dm} + \rho v \frac{dv}{dm} \right)
 = v_m \frac{dp_0}{dm}
-= -\left(\frac{2}{b}\right) \tau v
+= -\left(\frac{2}{b}\right) (\tau_m v_m + \tau_\theta v_\theta)
 $$
-which can be rewritten as
+In the special case where $\tau_m = \tau \cos \alpha$ and $\tau_\theta = \tau \sin \alpha$, this expression can be simplified to:
 $$
 \frac{dp_0}{dm}  = -\frac{2 \tau}{b \cos \alpha}
 $$
@@ -141,6 +141,8 @@ $$
 dm = \cos(\alpha)\, ds \to \frac{dp_0}{ds} = -\frac{2 \tau}{b}
 $$
 This relation shows explicitly that the loss of stagnation pressure arises from viscous shear stress $\tau$, that is, from forces that do not perform mechanical work in the energy equation. The factor $b$ is related to the hydraulic diameter of the channel, while the $\cos \alpha$ term accounts for the projection of the streamline direction onto the meridional plane. Consequently, total pressure loss scales with the actual streamline length, implying that longer flow paths or larger flow angles lead to greater viscous dissipation.
+
+> Note! The stagnation pressure given by integrating $dp_0=dp + v dv$ does not match exactly the stagnation pressure computed as p_0 = p(h_0,\,s)
 
 The total pressure loss can also be expressed in terms of the pressure loss coefficient $Y$ and the Fanning skin friction factor $c_f$:
 $$
@@ -171,7 +173,7 @@ combining these gives
 $$
 \rho T\,ds = -\,dp_0 + \frac{2}{b}\dot{q}.
 $$
-For adiabatic flow $(\dot{q} = 0)$1, this simplifies to
+For adiabatic flow $(\dot{q} = 0$), this simplifies to
 $$
 T\,ds = -\,\frac{dp_0}{\rho},
 $$
@@ -187,45 +189,106 @@ Following Aungier, viscous losses in vaneless passages can be represented as the
 
 Each of these mechanisms contributes to the overall total pressure loss and, consequently, to entropy generation within the flow passage.
 
-### Distribution of losses between momentum components
+#### Aungier's loss distribution
 
-In Aungier’s formulation, the skin friction losses appear in both the meridional and tangential momentum equations, while the diffusion and curvature losses are applied only to the meridional component. As I see it, there is no strong physical justification for this asymmetry, and it likely affects the predicted flow angle distribution within the passage.
+In Aungier’s formulation, skin friction losses contribute to both the meridional and tangential momentum equations, while the diffusion and curvature losses act only on the meridional component. The corresponding shear stresses are expressed as  
+$$
+\begin{gather}
+  \tau_m = \frac{1}{2} \rho v^2 \left( c_{f,W} \cos \alpha + c_{f,D} + c_{f,C} \right), \\
+  \tau_\theta = \frac{1}{2} \rho v^2 c_{f,W} \sin \alpha ,
+\end{gather}
+$$  
+where $\tau_m$ and $\tau_\theta$ denote the meridional and tangential wall shear stresses, respectively. For adiabatic flow, the corresponding rate of entropy generation can be written as  
+$$
+\begin{gather}
+T \dot{\sigma}_g = \rho v_m T \frac{ds}{dm} = -v_m \frac{dp_0}{dm} 
+= \left(\frac{2 }{b}\right) (\tau_m v_m + \tau_\theta v_\theta), \\[4pt]
+T \dot{\sigma}_g = \left(\frac{2 }{b}\right) \left(\frac{1}{2} \rho v^3 \right)
+( c_{f,W} + c_{f,D}\cos \alpha + c_{f,C}\cos \alpha ).
+\end{gather}
+$$  
 
-I believe that a more suitable approach is to apply all three loss contributions to both the meridional and tangential momentum equations. In this case, the effects can be lumped into a single equivalent shear stress term $\tau = \tfrac{1}{2}c_f \rho v^2$, which consistently influences both momentum components.
+**Wall loss**
 
-The total loss contribution can be expressed in terms of an overall sking friction coefficient:
+The wall friction coefficient, $c_{f,W}$, accounts for viscous drag along the flow passage walls. Aungier estimates this term using a simple boundary-layer growth model based on a 1/7th power law for the velocity profile, although no further details are provided. An effective alternative is to compute $c_{f,W}$ from established correlations for fully developed internal flows, using the hydraulic diameter of the annular channel.
+
+In the laminar regime, the Fanning friction factor is given by the analytical result:
+$$
+c_{f,\text{lam}} = \frac{16}{Re}.
+$$  
+For turbulent flow, the Haaland correlation offers a practical explicit formulation that accurately approximates the implicit Colebrook–White equation, relating the skin friction factor to the Reynolds number and relative surface roughness:  
+$$
+c_{f,\text{turb}} = \frac{1}{4} 
+\left[-1.8 \log_{10} \left( \frac{6.9}{Re} + \left( \frac{\epsilon / D}{3.7} \right)^{1.11} \right)\right]^{-2},
+$$  
+where $\epsilon$ is the absolute roughness and $D$ is the hydraulic diameter. The factor of one quarter accounts for the conversion from the Darcy to the Fanning friction factor.
+To ensure a smooth transition between flow regimes, a hyperbolic tangent blending function is applied:  
+
+$$
+c_{f,W} = (1 - \alpha) \, c_{f,\text{lam}} + \alpha \, c_{f,\text{turb}},
+$$  
+
+with the blending parameter $\alpha$ defined as  
+
+$$
+\alpha = \frac{1}{2} \left[1 + \tanh\left(\frac{Re - Re_{\text{tr}}}{\Delta Re}\right)\right].
+$$  
+
+Here, $Re_{\text{tr}} = 2300$ represents the nominal transition Reynolds number, while $\Delta Re = 500$ controls the smoothness of the transition.  This formulation yields a continuous and differentiable expression for $c_{f,W}$ across all Reynolds numbers, ensuring stability and robustness in numerical implementations.
+
+**Diffusion loss**
+
+The diffusion loss coefficient, $c_{f,D}$, represents the additional losses associated with flow deceleration in regions where the cross-sectional area increases. It is defined as  
+$$
+c_{f,D} = D (1 - E),
+$$  
+where the diffusion parameter $D$ is formulated in analogy to the divergence parameter introduced by Reneau et al. (1967) to characterize flow regimes in planar diffusers:  
+$$
+D = \frac{b}{A} \frac{dA}{dm}.
+$$  
+Diffusion losses remain low for values of $D$ smaller than the limiting value $D_m$, which depends on the inlet geometry and arclength of the flow channel [wouldnt it be more physically consistent that the cosine terms appears in the denominator of this equation?]:  
+$$
+D_m = 0.4 \cos \alpha_{\text{in}} \left(\frac{b_{\text{in}}}{L_m}\right)^{0.35}.
+$$  
+The diffusion efficiency $E$ modulates the effective loss contribution according to the local diffusion intensity:  
+$$
+E =
+\begin{cases}
+1, & D/D_m \le 0, \\[4pt]
+1 - 0.2 \left(\dfrac{D}{D_m}\right)^{2}, & 0 < D/D_m < 1, \\[6pt]
+0.8 \sqrt{\dfrac{D_m}{D}}, & D/D_m \ge 1.
+\end{cases}
+$$  
+A value of $E = 1$ corresponds to ideal diffusion (no additional losses), while decreasing $E$ indicates a rise in irreversible dissipation as the local diffusion strength increases.
+
+**Curvature loss**
+
+Finally, the curvature loss coefficient, $c_{f,C}$, accounts for secondary flow effects induced by streamline curvature and is given by  
+$$
+c_{f,C} = \frac{1}{26} \, b\,\kappa \cos \alpha,
+$$  
+
+where $\kappa$ is the local curvature of the mean streamline. Together, these three components define the total viscous loss distribution along the flow path in Aungier’s formulation.
+
+### Alternative loss distribution
+
+As I see it, there is no strong physical justification for the asymmetry in the loases, and it likely affects the predicted flow angle distribution within the passage. I believe that a more suitable approach is to lump the three effects into a single equivalent shear stress term $\tau = \tfrac{1}{2}c_f \rho v^2$, which consistently influences both the meridional and tangential momentum equations:
+ $$
+ \begin{gather}
+  \tau_m = \frac{1}{2} \rho v^2 \left( c_{f,W} + c_{f,D} + c_{f,C} \right) \cos \alpha  \\
+  \tau_\theta = \frac{1}{2} \rho v^2 \left( c_{f,W} + c_{f,D} + c_{f,C} \right) \sin \alpha
+\end{gather}
+$$
+In this case, the entropy generation is given by
+$$
+T \dot{\sigma}_g = \left(\frac{2 }{b}\right) \tau v = \left(\frac{2 }{b}\right) \left(\frac{1}{2} \rho v^3 \right)( c_{f,W} + c_{f,D}\alpha + c_{f,C} ) 
+$$
+which is slightly higher than the values from Angier's approach. We should investigate this approach and validate against CFD simulations in a future work. The total loss contribution can be expressed in terms of an overall skin friction coefficient:
 $$
 c_f = \sum_i c_{f,i} = c_{f,W} + c_{f,D} + c_{f,C}
 $$
-where:
-- $c_{f,W}$ is the wall friction coefficient, computed using Reynolds number correlations for flows in straight pipes.  
-- $c_{f,D}$ represents the diffusion loss coefficient, defined as
-  $$
-  c_{f,D} = D (1 - E)
-  $$
-  with
-  $$
-  D = \frac{b}{A} \frac{dA}{dm}, 
-  \qquad 
-  D_m = 0.4 \cos \alpha_{\text{in}} \left(\frac{b_{\text{in}}}{L_m}\right)^{0.35}
-  $$
-  and the diffusion efficiency $E$ given by
-  $$
-  E =
-  \begin{cases}
-  1, & D \le 0, \\[4pt]
-  1 - 0.2 \left(\frac{D}{D_m}\right)^{2}, & 0 < D < D_m, \\[6pt]
-  0.8 \sqrt{\frac{D_m}{D}}, & D \ge D_m
-  \end{cases}
-  $$
 
-- $c_{f,C}$ corresponds to the curvature loss coefficient, expressed as
-
-  $$
-  c_{f,C} = \frac{1}{26} \, b\,\kappa\cos \alpha
-  $$
-
-  where $\kappa$ is the local curvature of the streamline.
+>Note: investigate via CFD simulations if we should change the formulation of the alpha term in the diffusion loss to reflect that fact that when the flow angle is higher, the flow traverses through longer streamlines and as a result experiences a weaker diffusion per unit of meridional length? Does this argument make sense?
 
 
 ## Expressing the loss distribution
@@ -243,11 +306,27 @@ $$
 \eta = \frac{h_{2s} - h_1}{h_{01}- h_1} = \frac{(h_{01}- h_1) - (h_{01}- h_{2}) - (h_{2}- h_{2s})}{h_{01}- h_1} = 1 - \frac{h_{01}- h_{2}}{h_{01}- h_1} - \frac{h_{2}- h_{2s}}{h_{01}- h_1} 
 $$
 $$
-\eta = 1 - \Delta \eta_{p,kinetic} - \Delta \eta_{p,loss}
+\eta = 1 - \Delta \eta_{kinetic} - \Delta \eta_{loss}
 $$
 
-These value of pressure recovery or efficiency might be higher than unity if the flow is not adiabatic.
+If we formulate as a differential equation to be integrated we have that
 
+$$
+d\eta = dh_s / (h_{01}- h_1) = \frac{dp}{\rho (h_{01}- h_1)}
+$$
+$$
+d(\Delta \eta_{kinetic}) = -dh/ (h_{01}- h_1)
+$$
+$$
+d(\Delta \eta_{loss}) = -(dh - dp/\rho) / (h_{01}- h_1) = T ds / (h_{01}- h_1)
+$$
+
+
+
+Observations
+- These value of pressure recovery or efficiency might be higher than unity if the flow is not adiabatic.
+- It is not clear to me how to formulate the stagnation pressure differential in a way that is consistent with $p_0 = p(h_0, s)$
+- Computing the efficiency using the algebraic formula or integrating the differential formulas produces different results due to the reheating effect introduced by losses (similar to the difference between polytropic and isentropic efficiencies).
 
 ## Thoughts for the paper
 

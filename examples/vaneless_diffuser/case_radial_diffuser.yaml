@@ -1,0 +1,40 @@
+name: radial_axial_bend
+
+operating_conditions:
+  p0_in: 101325.0
+  T0_in: 300.0
+  Ma_in: 0.05
+  alpha_in: 60.0
+
+geometry:
+  z_in: 0.0                 # m
+  z_out: 0.0               # m
+  r_in: 0.10                # m
+  r_out: 0.20               # m
+  b_in: 0.015               # m
+  b_out: 0.020              # m
+  phi_in: 90.0              # degrees
+  phi_out: 90.0              # degrees
+  td_in: 0.1                # m
+  td_out: 0.1              # m
+
+model_options:
+  friction_model:
+    type: aungier
+    roughness: 1.0e-6
+    Re_transition: 2300.0
+    Re_width: 500.0
+    # type: constant_friction_factor
+    # Cf: 0.01
+  heat_model: 
+    type: adiabatic
+
+solver_options:
+  solver_name: Dopri5
+  adjoint_name: ForwardMode
+  rtol: 1.0e-6
+  atol: 1.0e-6
+  n_points: 50
+  max_steps: 200
+  throw: true
+
