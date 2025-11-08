@@ -298,7 +298,7 @@ $$
 C_p = \frac{p_2 - p_1}{p_{01}- p_1} = \frac{(p_{01}- p_1)- (p_{02}- p_2) - (p_{01}- p_{02}) }{p_{01}- p_1} = 1 - \frac{p_{02}- p_{2}}{p_{01}- p_1} - \frac{p_{01}- p_{02}}{p_{01}- p_1} 
 $$
 $$
-C_p = 1 - \Delta C_{p,kinetic} - \Delta C_{p,loss}
+C_p = 1 - \Delta C_{p,kinetic} - \Delta C_{p,loss} = 1 - Y_{kinetic} - Y_{loss} 
 $$
 
 In an analogous way, the efficiency of a diffuser can be expressed as:
