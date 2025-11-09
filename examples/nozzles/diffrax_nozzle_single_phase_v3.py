@@ -189,7 +189,7 @@ N_h = 60
 N_p = 60
 
 def compute_bounds(span : float) -> np.array:
-    dimensions = dict(
+    geometric_dimensions = dict(
         length=83.50e-3,
         L_convergent = 27.35e-3,
         height_in = 5e-3,
@@ -198,10 +198,17 @@ def compute_bounds(span : float) -> np.array:
         width = 3e-3,
         roughness = 1e-6,
     )
+    operational_dimensions = dict(
+        p0_in = 91e5,
+        h0_in = 301.0047e3,
+    )
 
     bounds = dict()
-    for key, value in dimensions.items():
+    for key, value in geometric_dimensions.items():
         bounds.update({key : np.array([value - value * span, value + value * span])})
+
+    for key, value in operational_dimensions.items():
+        bounds.update({key : np.array([value, value + value * span])})
 
     return bounds
 
@@ -258,11 +265,7 @@ if __name__ == "__main__":
         atol=1e-8,
     )
 
-    bounds = compute_bounds(0.7)
-    bounds.update({
-        "p0_in": [91e5, 91e5],
-        "h0_in": [301.0047e3, 301.0047e3],
-    })
+    bounds = compute_bounds(0.2)
     print(bounds)
     sample = qmc.LatinHypercube(d=len(bounds), seed=0).random(N_samples)
     arr_bounds = np.vstack(list(bounds.values()))
@@ -276,7 +279,6 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = np.array([92, 91, 90]) * 1e5
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(samples)))  # Generate colors
     solution_list = []
     for i, sample in samples.iterrows():
