@@ -3,26 +3,26 @@ import jax
 import jax.numpy as jnp
 import diffrax as dfx
 import equinox as eqx
+import numpy as np
 import optimistix as optx
 import jaxprop as jxp
 import matplotlib.pyplot as plt
 
 from matplotlib import gridspec
+from pandas import DataFrame
+from scipy.stats import qmc
 
 jxp.set_plot_options(grid=False)
 
 from nozzlex.functions import (
     nozzle_single_phase_core,
-    symmetric_nozzle_geometry,
-    linear_convergent_divergent_nozzle,
     NozzleParams,
     BVPSettings,
     IVPSettings,
     replace_param,
-    solve_nozzle_model_collocation,
-    initialize_flowfield,
     compute_critical_inlet,
     compute_static_state,
+    ConvergentDivergentNozzleParams,
 )
 
 # v1 solves the ode system using the space marching in non-autonomous form
@@ -188,6 +188,24 @@ p_max = 150e5   # Pa
 N_h = 60
 N_p = 60
 
+def compute_bounds(span : float) -> np.array:
+    dimensions = dict(
+        length=83.50e-3,
+        L_convergent = 27.35e-3,
+        height_in = 5e-3,
+        height_throat = 0.12e-3,
+        height_out = 0.72e-3,
+        width = 3e-3,
+        roughness = 1e-6,
+    )
+
+    bounds = dict()
+    for key, value in dimensions.items():
+        bounds.update({key : np.array([value - value * span, value + value * span])})
+
+    return bounds
+
+
 if __name__ == "__main__":
 
     # # Define model parameters
@@ -195,12 +213,11 @@ if __name__ == "__main__":
     # fluid = jxp.perfect_gas.get_constants(fluid_name, T_ref=300, P_ref=101325)
 
     # -- 1. Find critical state with continuation --
+    N_samples = 20
 
-    params_model = NozzleParams(
+    params_model = ConvergentDivergentNozzleParams(
         p0_in=91e5,  # Pa 
         h0_in=310.0047e3,
-        # D_in=0.050,  # m
-        # length=5.00,  # m
         roughness=1e-6,  # m
         T_wall=300.0,  # K
         Ma_low=0.95,
@@ -218,7 +235,6 @@ if __name__ == "__main__":
                                  p_max=p_max,
                                  N_h=N_h,
                                  N_p=N_p),
-        geometry=linear_convergent_divergent_nozzle,
     )
 
     params_bvp = BVPSettings(
@@ -242,20 +258,34 @@ if __name__ == "__main__":
         atol=1e-8,
     )
 
+    bounds = compute_bounds(0.7)
+    bounds.update({
+        "p0_in": [91e5, 91e5],
+        "h0_in": [301.0047e3, 301.0047e3],
+    })
+    print(bounds)
+    sample = qmc.LatinHypercube(d=len(bounds), seed=0).random(N_samples)
+    arr_bounds = np.vstack(list(bounds.values()))
+    sample = sample * (arr_bounds[:, 1] - arr_bounds[:, 0]) + arr_bounds[:, 0]
+    samples = DataFrame(sample, columns=list(bounds.keys()))
+
     L_nakagawa = 83.50e-3
     params_model = replace_param(params_model, "length", L_nakagawa)
-
 
     # Solve the problem
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([92, 91, 90]) * 1e5
-    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
+    input_array = np.array([92, 91, 90]) * 1e5
+    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(samples)))  # Generate colors
     solution_list = []
-    for i, p0_in in enumerate(input_array):
+    for i, sample in samples.iterrows():
+        sample = sample.to_dict()
+        for key, val in sample.items():
+            params_model = replace_param(params_model, key, val)
+
         t0 = time.perf_counter()
-        params_model = replace_param(params_model, "p0_in", p0_in)
+        #params_model = replace_param(params_model, "p0_in", p0)
         sol = transonic_nozzle_single_phase(params_model, params_bvp, params_ivp)
 
         # Relative error diagnostics
@@ -275,20 +305,20 @@ if __name__ == "__main__":
         solution_list.append(sol)
 
     # Create the figure
-    fig = plt.figure(figsize=(5, 10))
-    gs = gridspec.GridSpec(5, 1, height_ratios=[3, 3, 3, 3, 1])
-    xg = solution_list[0].ys["x"]
-    rg = solution_list[0].ys["diameter"] / 2.0
-    ax0 = fig.add_subplot(gs[0])
-    ax1 = fig.add_subplot(gs[1], sharex=ax0)
-    ax2 = fig.add_subplot(gs[2], sharex=ax0)
-    ax3 = fig.add_subplot(gs[3], sharex=ax0)
-    ax4 = fig.add_subplot(gs[4], sharex=ax0)
-    axs = [ax0, ax1, ax2, ax3, ax4]
+    for sol, color, val in zip(solution_list, colors, samples["length"].values):
+        fig = plt.figure(figsize=(5, 10))
+        gs = gridspec.GridSpec(5, 1, height_ratios=[3, 3, 3, 3, 1])
+        xg = sol.ys["x"]
+        rg = sol.ys["diameter"] / 2.0
+        ax0 = fig.add_subplot(gs[0])
+        ax1 = fig.add_subplot(gs[1], sharex=ax0)
+        ax2 = fig.add_subplot(gs[2], sharex=ax0)
+        ax3 = fig.add_subplot(gs[3], sharex=ax0)
+        ax4 = fig.add_subplot(gs[4], sharex=ax0)
+        axs = [ax0, ax1, ax2, ax3, ax4]
 
-    # --- row 1: pressure (bar): solid p0, dashed p ---
-    axs[0].set_ylabel("Pressure (bar)")
-    for color, val, sol in zip(colors, input_array, solution_list):
+        # --- row 1: pressure (bar): solid p0, dashed p ---
+        axs[0].set_ylabel("Pressure (bar)")
         x = sol.ys["x"]
         # axs[0].plot(x, sol.ys["p0"] * 1e-5, linestyle="--", color=color)
         axs[0].plot(
@@ -298,13 +328,12 @@ if __name__ == "__main__":
             color=color,
             marker="o",
             markersize="3",
-            label = rf"$p_{{0,\mathrm{{in}}}} = {val:0.3f}$"
+            label=rf"$D_{{0,\mathrm{{in}}}} = {val:0.3f}$"
         )
-    axs[0].legend(loc="upper right", fontsize=7)
+        axs[0].legend(loc="upper right", fontsize=7)
 
-    # --- row 2: Mach number ---
-    axs[1].set_ylabel("Mach number (-)")
-    for color, val, sol in zip(colors, input_array, solution_list):
+        # --- row 2: Mach number ---
+        axs[1].set_ylabel("Mach number (-)")
         axs[1].plot(
             sol.ys["x"],
             sol.ys["Ma"],
@@ -313,33 +342,31 @@ if __name__ == "__main__":
             markersize="3",
         )
 
-    # Static and stagnation enthalpy
-    axs[2].set_ylabel("Enthalpy (J/kg)")
-    for color, val, sol in zip(colors, input_array, solution_list):
+        # Static and stagnation enthalpy
+        axs[2].set_ylabel("Enthalpy (J/kg)")
+
         # axs[2].plot(sol.ys["x"], sol.ys["h"], color=r["color"], markersize=3, marker"o")
         axs[2].plot(sol.ys["x"], sol.ys["h"], color=color, markersize=3, marker="o")
 
-    # Entropy
-    axs[3].set_ylabel("Quality")
-    for color, val, sol in zip(colors, input_array, solution_list):
+        # Entropy
+        axs[3].set_ylabel("Quality")
         axs[3].plot(sol.ys["x"], sol.ys["Q"], color=color, markersize=3, marker="o")
 
-    # --- row 3: nozzle geometry ---
-    axs[4].fill_between(xg, -rg, +rg, color="lightgrey")  # shaded nozzle
-    x_closed = jnp.concatenate([xg, xg[::-1], xg[:1]])
-    y_closed = jnp.concatenate([rg, -rg[::-1], rg[:1]])
-    axs[4].plot(x_closed, y_closed, "k", linewidth=1.2)
-    # r_abs_max = float(jnp.max(jnp.abs(rg)))
-    # ax3.set_ylim(-1.5 * r_abs_max, 1.5 * r_abs_max)
-    axs[4].set_aspect("equal", adjustable="box")
-    axs[4].set_xlabel("Axial coordinate x (m)")
-    fig.tight_layout(pad=1)
+        # --- row 3: nozzle geometry ---
+        axs[4].fill_between(xg, -rg, +rg, color="lightgrey")  # shaded nozzle
+        x_closed = jnp.concatenate([xg, xg[::-1], xg[:1]])
+        y_closed = jnp.concatenate([rg, -rg[::-1], rg[:1]])
+        axs[4].plot(x_closed, y_closed, "k", linewidth=1.2)
+        # r_abs_max = float(jnp.max(jnp.abs(rg)))
+        # ax3.set_ylim(-1.5 * r_abs_max, 1.5 * r_abs_max)
+        axs[4].set_aspect("equal", adjustable="box")
+        axs[4].set_xlabel("Axial coordinate x (m)")
 
+        fig.tight_layout(pad=1)
 
+        fluid = jxp.Fluid(name="CO2", backend="HEOS")
+        fig, ax = fluid.plot_phase_diagram(x_prop="h", y_prop="p", plot_quality_isolines=True)
+        ax.plot(sol.ys["h"], sol.ys["p"], "ko")
 
-    fluid = jxp.Fluid(name="CO2", backend="HEOS")
-    fig, ax = fluid.plot_phase_diagram(x_prop="s", y_prop="T", plot_quality_isolines=True)
-    ax.plot(sol.ys["s"], sol.ys["T"], "ko")
-
-    # Show figures
-    plt.show()
+        # Show figures
+        plt.show()

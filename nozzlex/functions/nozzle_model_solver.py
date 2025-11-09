@@ -82,12 +82,9 @@ def f64(value):
 
 class NozzleParams(eqx.Module):
     fluid: Any = eqx.field(static=False)
-    geometry: Callable = eqx.field(static=True)
     p0_in: jnp.ndarray = f64(1.0e5)       # Pa
     d0_in: jnp.ndarray = f64(1.20)        # kg/m³
     h0_in: jnp.ndarray = f64(300e3)
-    D_in: jnp.ndarray = f64(0.050)        # m
-    length: jnp.ndarray = f64(5.00)       # m
     roughness: jnp.ndarray = f64(1e-6)    # m
     T_wall: jnp.ndarray = f64(300.0)      # K
     Ma_in: jnp.ndarray = f64(0.1)
@@ -97,6 +94,73 @@ class NozzleParams(eqx.Module):
     heat_transfer: jnp.ndarray = f64(0.0)
     wall_friction: jnp.ndarray = f64(0.0)
     p_termination: jnp.ndarray = f64(0.0)
+
+class ConvergentDivergentNozzleParams(NozzleParams):
+    length: jnp.ndarray = f64(5.00)  # m
+    L_convergent: jnp.ndarray = f64(27.35e-3)
+    height_in: jnp.ndarray = f64(5e-3)
+    height_throat: jnp.ndarray = f64(0.12e-3)
+    height_out: jnp.ndarray = f64(0.72e-3)
+    width: jnp.ndarray = f64(3e-3)
+
+    # Nakagawa geometry
+    def geometry(
+            self, x
+    ):
+        """
+        JAX-safe linear convergent–divergent nozzle (planar geometry).
+        Uses jax.lax.cond (JAX's version of 'if') so only the active branch runs.
+        Returns (A, dAdx, perimeter, height).
+        """
+        L_divergent = self.length - self.L_convergent
+
+        def convergent(x_):
+            h = self.height_in + (self.height_throat - self.height_in) * x_ / self.L_convergent
+            A = 2.0 * h * self.width
+            dAdx = 2.0 * self.width * (self.height_throat - self.height_in) / self.L_convergent
+            return A, dAdx, h
+
+        def divergent(x_):
+            h = self.height_throat + (self.height_out - self.height_throat) * (x_ - self.L_convergent) / L_divergent
+            A = 2.0 * h * self.width
+            dAdx = 2.0 * self.width * (self.height_out - self.height_throat) / L_divergent
+            return A, dAdx, h
+
+        A, dAdx, h = jax.lax.cond(x <= self.L_convergent, convergent, divergent, operand=x)
+        perimeter = 2.0 * (self.width + 2.0 * h)
+        D_h = 4.0 * A / perimeter
+
+        return A, dAdx, perimeter, h, D_h
+
+class SymmetricNozzleGeometry(NozzleParams):
+    D_in : jnp.ndarray = f64(0.05)      # m
+    length: jnp.ndarray = f64(5.00)  # m
+    A_inlet: jnp.ndarray=f64(0.30)
+    A_throat: jnp.ndarray=f64(0.15)
+
+    def geometry(self, x):
+        """
+        Return A (m^2), dA/dx (m), perimeter (m), diameter (m) for a symmetric parabolic CD nozzle.
+        x: position in m (scalar or array)
+        L: total length in m (scalar)
+        """
+
+        def area_fn(x_):
+            xi = x_ / self.length
+            return self.A_inlet - 4.0 * (self.A_inlet - self.A_throat) * xi * (1.0 - xi)
+
+        # make it work for both scalar and array x
+        A = area_fn(x)
+
+        # jacfwd works for vector outputs directly
+        dAdx = jax.jacfwd(area_fn)(x)
+
+        radius = jnp.sqrt(A / jnp.pi)  # m
+        diameter = 2.0 * radius  # m
+        perimeter = jnp.pi * diameter  # m
+        D_h = 4.0 * A / perimeter
+
+        return A, dAdx, perimeter, diameter, D_h
 
 
 class BVPSettings(eqx.Module):
@@ -128,6 +192,9 @@ class ResidualParams(eqx.Module):
 
 def replace_param(obj, field, value):
     """Return a copy of obj with a single field replaced."""
+    if field == "geometry_params":
+        return eqx.tree_at(lambda o: getattr(o, field), obj, replace=value)
+
     return eqx.tree_at(lambda o: getattr(o, field), obj, replace=jnp.asarray(value))
 
 
