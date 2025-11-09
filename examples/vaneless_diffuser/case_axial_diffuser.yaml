@@ -3,7 +3,7 @@ name: axial_diffuser
 operating_conditions:
   p0_in: 101325.0
   T0_in: 300.0
-  Ma_in: 0.05
+  Ma_in: 0.07
   alpha_in: 00.0
 
 geometry:
@@ -11,8 +11,8 @@ geometry:
   z_out: 1.0               # m
   r_in: 1.0                # m
   r_out: 1.0               # m
-  b_in: 0.05               # m
-  b_out: 0.05              # m
+  b_in: 0.01               # m
+  b_out: 0.01              # m
   phi_in: 0.0              # degrees
   phi_out: 0.0              # degrees
   td_in: 0.0                # m
@@ -21,7 +21,7 @@ geometry:
 model_options:
   friction_model:
     type: aungier
-    roughness: 1.0e-6
+    roughness: 10.0e-6
     Re_transition: 2300.0
     Re_width: 500.0
     # type: constant_friction_factor
@@ -30,7 +30,7 @@ model_options:
     type: adiabatic
 
 solver_options:
-  solver_name: Euler
+  solver_name: Dopri5
   adjoint_name: ForwardMode
   rtol: 1.0e-6
   atol: 1.0e-6

@@ -131,10 +131,10 @@ if __name__ == "__main__":
     ax3.grid(True, which="both", ls=":", alpha=0.6)
     fig3.tight_layout()
 
-    # Save figures
-    jxp.savefig_in_formats(fig1, os.path.join(OUTDIR, "sensitivity_divergence_pressure_recovery"))
-    jxp.savefig_in_formats(fig2, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss"))
-    jxp.savefig_in_formats(fig3, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss_distribution"))
+    # # Save figures
+    # jxp.savefig_in_formats(fig1, os.path.join(OUTDIR, "sensitivity_divergence_pressure_recovery"))
+    # jxp.savefig_in_formats(fig2, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss"))
+    # jxp.savefig_in_formats(fig3, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss_distribution"))
 
     # Show plots
     plt.show()

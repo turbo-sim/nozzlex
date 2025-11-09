@@ -346,3 +346,5 @@ Also a b-spline (linear) for the thickness distribution.
 
 Explain the equations for the construction and arclength/coordinate reparametrization in an appendix?
 
+
+- The text steps of development could be to add a 1D integral-form boundary layer analysis to get a better estimation of the wall friction loss, the blockage due to boundary layers, and also the state of the boundary layer and potential occurence of separation/stall.
