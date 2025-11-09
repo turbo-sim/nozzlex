@@ -74,3 +74,4 @@ venv/
 
 **/fluid_tables/
 **/verification_figures/
+.idea/
