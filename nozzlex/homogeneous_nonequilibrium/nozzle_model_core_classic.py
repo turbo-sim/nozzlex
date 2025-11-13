@@ -3,22 +3,17 @@ import jax.numpy as jnp
 import jaxprop as jxp
 from jax.numpy.linalg import det
 import equinox as eqx
-import optimistix as optx
-
-
-from CoolProp import AbstractState
-import CoolProp.CoolProp as CP
 
 
 
 
-def nozzle_homogeneous_non_equilibrium_core(x, y, args):
-    """Wrapper that adapts from (x, y) to autonomous form."""
-    Y = jnp.concatenate([jnp.atleast_1d(x), y])
-    return nozzle_homogeneous_non_equilibrium_autonomous(0.0, Y, args)
+# def nozzle_homogeneous_non_equilibrium_core(t, y, args):
+#     """Wrapper that adapts from (t, y) to autonomous form."""
+#     Y = jnp.concatenate([jnp.atleast_1d(t), y])
+#     return nozzle_homogeneous_non_equilibrium_autonomous(0.0, Y, args)
 
 @eqx.filter_jit
-def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
+def nozzle_homogeneous_non_equilibrium_classic(x, Y, args):
     """
     Autonomous formulation of the nozzle equations:
         dx/dt   = det(A)
@@ -26,7 +21,7 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
 
     State vector: Y = [x, v, rho, p]
     """
-    x, alpha1, alpha2, rho1, rho2, u, p, h1, h2 = Y
+    alpha1, alpha2, rho1, rho2, u, p, h1, h2 = Y
 
     # v = jnp.where(jnp.abs(v) < 1e-6, jnp.sign(v)*1e-6, v)
     # Debug print using jax.debug.print
@@ -83,7 +78,7 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
     rho_mix = rho1 * alpha1 + rho2 * alpha2
     mu_mix = mu1 * alpha1 + mu2 * alpha2
 
-    S = (rho1**2 * rho2**2 * u**3) ** (1/8)
+    S = (rho1**2 * rho2**2 * u**3)**(1/8)
 
     # --- Geometry ---
     # A, dAdx, perimeter, radius = args.geometry(x, L) # When using symmetric geometry
@@ -96,10 +91,9 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
     tau_w_mix = get_wall_viscous_stress(f_D, rho_mix, u)
     Ai, d_2 = interfacial_area(alpha2)
     ht_1 = 6 # water
-    # Nu_2 = 12
-    # k_2 = state2["k"]
-    # ht_2 = (k_2 * Nu_2) / d_2 # nitrogen
-    ht_2 = ranz_marshall_htc(alpha2, state2, state1,)
+    Nu_2 = 12
+    k_2 = state2["k"]
+    ht_2 = (k_2 * Nu_2) / d_2 # nitrogen
     ht_21 = (1 / ((1/ht_1) + (1/ht_2)))
 
     a_mix = get_speed_of_sound_mixture(G1, alpha1, a1, rho1, G2, alpha2, a2, rho2)
@@ -108,7 +102,9 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
     # tau_w_mix = wall_friction * tau_w_mix
     # f_D = wall_friction * f_D
 
-    a_mix_stadke = get_speed_of_sound_mixture_stadke(alpha1, a1, rho1, alpha2, a2, rho2)
+    # a_mix_stadke = get_speed_of_sound_mixture_stadke(alpha1, a1, rho1, alpha2, a2, rho2)
+
+    
 
     # --- Build A matrix and b vector ---
     # A_mat = jnp.array([[d, v, 0.0], [d * v, 0.0, 1.0], [0.0, -(a**2), 1.0]])
@@ -125,98 +121,44 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
                 ]
             )
     
-    # AS1 = AbstractState("HEOS", "Water")
-    # AS2 = AbstractState("HEOS", "Nitrogen")
-    # AS1.update(CP.HmassP_INPUTS, h1, p)
-    # AS2.update(CP.HmassP_INPUTS, h2, p)
-
-    
-    # drho_dP_1 = AS1.first_partial_deriv(CP.iDmass, CP.iP, CP.iHmass)
-    # drho_dh_1 = AS1.first_partial_deriv(CP.iDmass, CP.iHmass, CP.iP)
-
-    # drho_dP_2 = AS2.first_partial_deriv(CP.iDmass, CP.iP, CP.iHmass)
-    # drho_dh_2 = AS2.first_partial_deriv(CP.iDmass, CP.iHmass, CP.iP)
-
-    # deltap1 = drho_dP_1 - (1 + G1) / a1**2
-    # deltap2 = drho_dP_2 - ((1 + G2) / a2**2)
-    # deltah1 = drho_dh_1 - (-(rho1 * G1) / a1**2)
-    # deltah2 = drho_dh_2 - (-(rho2 * G2) / a2**2)
-
-    # jax.debug.print("dp1={dp1} | dp2={dp2} | dh1={dh1} | dh2={dh2}", dp1=deltap1, dp2=deltap2, dh1=deltah1, dh2=deltah2)
-
-
+    A_mat = A_mat / S
+    det_D = det(A_mat)
+    # det_D=1.0*alpha1*alpha2*rho1*rho2*u**3*(G1*a2**2*alpha1*rho1*rho2*u**2 - G1*a2**2*alpha1*rho2*rho_mix*u**2 + G2*a1**2*alpha2*rho1*rho2*u**2 - G2*a1**2*alpha2*rho1*rho_mix*u**2 + a1**2*a2**2*alpha1*rho1*rho2 + a1**2*a2**2*alpha2*rho1*rho2 - a1**2*alpha2*rho1*rho_mix*u**2 - a2**2*alpha1*rho2*rho_mix*u**2)/(a1**2*a2**2)
 
 
     b_vec = jnp.asarray(
                 [
-                    0.0,
-                    -(dAdx/A) * alpha1 * rho1 *  u,
-                    -(dAdx/A) * alpha2 * rho2 *  u,
-                    -(tau_w_mix * perimeter) / A,
-                    ht_21 * Ai * (T2 - T1),
-                    ht_21 * Ai * (T1 - T2),
-                    0.0,
-                    0.0
+                0.0,
+                -(dAdx/A) * alpha1 * rho1 *  u,
+                -(dAdx/A) * alpha2 * rho2 *  u,
+                -(tau_w_mix * perimeter) / A,
+                ht_21 * Ai * (T2 - T1),
+                ht_21 * Ai * (T1 - T2),
+                0.0,
+                0.0
                 ]
             )
-
-    A_mat = A_mat / S
+    
     b_vec = b_vec / S
 
     # --- Determinants ---
-    # D = det(A_mat)
-    A_mat_copy = 1
-    M1 = A_mat.at[:, 0].set(b_vec)
-    M2 = A_mat.at[:, 1].set(b_vec)
-    M3 = A_mat.at[:, 2].set(b_vec)
-    M4 = A_mat.at[:, 3].set(b_vec)
-    M5 = A_mat.at[:, 4].set(b_vec)
-    M6 = A_mat.at[:, 5].set(b_vec)
-    M7 = A_mat.at[:, 6].set(b_vec)
-    M8 = A_mat.at[:, 7].set(b_vec)
-
-    det_sympy = 1.0*alpha1*alpha2*rho1*rho2*u**3*(-G1*a2**2*alpha1*rho1*rho2*u**2 + G1*a2**2*alpha1*rho2*rho_mix*u**2 - G2*a1**2*alpha2*rho1*rho2*u**2 + G2*a1**2*alpha2*rho1*rho_mix*u**2 - a1**2*a2**2*alpha1*rho1*rho2 - a1**2*a2**2*alpha2*rho1*rho2 + a1**2*alpha2*rho1*rho_mix*u**2 + a2**2*alpha1*rho2*rho_mix*u**2)/(a1**2*a2**2)
-    det_sympy_actual=1.0*alpha1*alpha2*rho1*rho2*u**3*(G1*a2**2*alpha1*rho1*rho2*u**2 - G1*a2**2*alpha1*rho2*rho_mix*u**2 + G2*a1**2*alpha2*rho1*rho2*u**2 - G2*a1**2*alpha2*rho1*rho_mix*u**2 + a1**2*a2**2*alpha1*rho1*rho2 + a1**2*a2**2*alpha2*rho1*rho2 - a1**2*alpha2*rho1*rho_mix*u**2 - a2**2*alpha1*rho2*rho_mix*u**2)/(a1**2*a2**2)
-    det_sympy_actua2=1.0*alpha1*alpha2*rho1*rho2*u**3*(G1*a2**2*alpha1*rho1*rho2*u**2 - G1*a2**2*alpha1*rho2*rho_mix*u**2 + G2*a1**2*alpha2*rho1*rho2*u**2 - G2*a1**2*alpha2*rho1*rho_mix*u**2 + a1**2*a2**2*alpha1*rho1*rho2 + a1**2*a2**2*alpha2*rho1*rho2 - a1**2*alpha2*rho1*rho_mix*u**2 - a2**2*alpha1*rho2*rho_mix*u**2)/(a1**2*a2**2)
-    # jax.debug.print("delta sympy={dd}", dd=det_sympy_actual-det_sympy_actua2)
-
-    # det_N1 = 1.0*alpha1*alpha2*rho1*rho2*u**2*(-A*Ai*G1*G2*T1*alpha1*ht_21*rho1*u**2 + A*Ai*G1*G2*T1*alpha1*ht_21*rho_mix*u**2 - A*Ai*G1*G2*T1*alpha2*ht_21*rho2*u**2 + A*Ai*G1*G2*T1*alpha2*ht_21*rho_mix*u**2 + A*Ai*G1*G2*T2*alpha1*ht_21*rho1*u**2 - A*Ai*G1*G2*T2*alpha1*ht_21*rho_mix*u**2 + A*Ai*G1*G2*T2*alpha2*ht_21*rho2*u**2 - A*Ai*G1*G2*T2*alpha2*ht_21*rho_mix*u**2 - A*Ai*G1*T1*a2**2*alpha2*ht_21*rho2 + A*Ai*G1*T1*alpha2*ht_21*rho_mix*u**2 + A*Ai*G1*T2*a2**2*alpha2*ht_21*rho2 - A*Ai*G1*T2*alpha2*ht_21*rho_mix*u**2 - A*Ai*G2*T1*a1**2*alpha1*ht_21*rho1 + A*Ai*G2*T1*alpha1*ht_21*rho_mix*u**2 + A*Ai*G2*T2*a1**2*alpha1*ht_21*rho1 - A*Ai*G2*T2*alpha1*ht_21*rho_mix*u**2 - G1*G2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 + G1*G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 + G1*a2**2*alpha1*alpha2*dAdx*rho1*rho2*u**3 - G1*a2**2*alpha1*alpha2*dAdx*rho2*rho_mix*u**3 + G1*a2**2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u - G1*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 - G2*a1**2*alpha1*alpha2*dAdx*rho1*rho2*u**3 + G2*a1**2*alpha1*alpha2*dAdx*rho1*rho_mix*u**3 - G2*a1**2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u + G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 + a1**2*alpha1*alpha2*dAdx*rho1*rho_mix*u**3 - a1**2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u - a2**2*alpha1*alpha2*dAdx*rho2*rho_mix*u**3 + a2**2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u)/(A*a1**2*a2**2)
-    # det_N2 = 1.0*alpha1*alpha2*rho1*rho2*u**2*(A*Ai*G1*G2*T1*alpha1*ht_21*rho1*u**2 - A*Ai*G1*G2*T1*alpha1*ht_21*rho_mix*u**2 + A*Ai*G1*G2*T1*alpha2*ht_21*rho2*u**2 - A*Ai*G1*G2*T1*alpha2*ht_21*rho_mix*u**2 - A*Ai*G1*G2*T2*alpha1*ht_21*rho1*u**2 + A*Ai*G1*G2*T2*alpha1*ht_21*rho_mix*u**2 - A*Ai*G1*G2*T2*alpha2*ht_21*rho2*u**2 + A*Ai*G1*G2*T2*alpha2*ht_21*rho_mix*u**2 + A*Ai*G1*T1*a2**2*alpha2*ht_21*rho2 - A*Ai*G1*T1*alpha2*ht_21*rho_mix*u**2 - A*Ai*G1*T2*a2**2*alpha2*ht_21*rho2 + A*Ai*G1*T2*alpha2*ht_21*rho_mix*u**2 + A*Ai*G2*T1*a1**2*alpha1*ht_21*rho1 - A*Ai*G2*T1*alpha1*ht_21*rho_mix*u**2 - A*Ai*G2*T2*a1**2*alpha1*ht_21*rho1 + A*Ai*G2*T2*alpha1*ht_21*rho_mix*u**2 + G1*G2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 - G1*G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 - G1*a2**2*alpha1*alpha2*dAdx*rho1*rho2*u**3 + G1*a2**2*alpha1*alpha2*dAdx*rho2*rho_mix*u**3 - G1*a2**2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u + G1*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 + G2*a1**2*alpha1*alpha2*dAdx*rho1*rho2*u**3 - G2*a1**2*alpha1*alpha2*dAdx*rho1*rho_mix*u**3 + G2*a1**2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u - G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 - a1**2*alpha1*alpha2*dAdx*rho1*rho_mix*u**3 + a1**2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u + a2**2*alpha1*alpha2*dAdx*rho2*rho_mix*u**3 - a2**2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u)/(A*a1**2*a2**2)
-    # det_N3 = 1.0*alpha2*rho1**2*rho2*u**2*(A*Ai*G1*G2*T1*alpha1*ht_21*rho1*u**2 - A*Ai*G1*G2*T1*alpha1*ht_21*rho_mix*u**2 + A*Ai*G1*G2*T1*alpha2*ht_21*rho2*u**2 - A*Ai*G1*G2*T1*alpha2*ht_21*rho_mix*u**2 - A*Ai*G1*G2*T2*alpha1*ht_21*rho1*u**2 + A*Ai*G1*G2*T2*alpha1*ht_21*rho_mix*u**2 - A*Ai*G1*G2*T2*alpha2*ht_21*rho2*u**2 + A*Ai*G1*G2*T2*alpha2*ht_21*rho_mix*u**2 + A*Ai*G1*T1*a2**2*alpha1*ht_21*rho2 + A*Ai*G1*T1*a2**2*alpha2*ht_21*rho2 - A*Ai*G1*T1*alpha2*ht_21*rho_mix*u**2 - A*Ai*G1*T2*a2**2*alpha1*ht_21*rho2 - A*Ai*G1*T2*a2**2*alpha2*ht_21*rho2 + A*Ai*G1*T2*alpha2*ht_21*rho_mix*u**2 - A*Ai*G2*T1*alpha1*ht_21*rho_mix*u**2 + A*Ai*G2*T2*alpha1*ht_21*rho_mix*u**2 + G1*G2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 - G1*G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 - G1*a2**2*alpha1**2*dAdx*rho1*rho2*u**3 + G1*a2**2*alpha1**2*dAdx*rho2*rho_mix*u**3 - G1*a2**2*alpha1**2*perimeter*rho2*tau_w_mix*u - G1*a2**2*alpha1*alpha2*dAdx*rho1*rho2*u**3 + G1*a2**2*alpha1*alpha2*dAdx*rho2*rho_mix*u**3 - G1*a2**2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u + G1*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 - G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 + a2**2*alpha1**2*dAdx*rho2*rho_mix*u**3 - a2**2*alpha1**2*perimeter*rho2*tau_w_mix*u + a2**2*alpha1*alpha2*dAdx*rho2*rho_mix*u**3 - a2**2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u)/(A*a1**2*a2**2)
-    # det_N4 = 1.0*alpha1*rho1*rho2**2*u**2*(-A*Ai*G1*G2*T1*alpha1*ht_21*rho1*u**2 + A*Ai*G1*G2*T1*alpha1*ht_21*rho_mix*u**2 - A*Ai*G1*G2*T1*alpha2*ht_21*rho2*u**2 + A*Ai*G1*G2*T1*alpha2*ht_21*rho_mix*u**2 + A*Ai*G1*G2*T2*alpha1*ht_21*rho1*u**2 - A*Ai*G1*G2*T2*alpha1*ht_21*rho_mix*u**2 + A*Ai*G1*G2*T2*alpha2*ht_21*rho2*u**2 - A*Ai*G1*G2*T2*alpha2*ht_21*rho_mix*u**2 + A*Ai*G1*T1*alpha2*ht_21*rho_mix*u**2 - A*Ai*G1*T2*alpha2*ht_21*rho_mix*u**2 - A*Ai*G2*T1*a1**2*alpha1*ht_21*rho1 - A*Ai*G2*T1*a1**2*alpha2*ht_21*rho1 + A*Ai*G2*T1*alpha1*ht_21*rho_mix*u**2 + A*Ai*G2*T2*a1**2*alpha1*ht_21*rho1 + A*Ai*G2*T2*a1**2*alpha2*ht_21*rho1 - A*Ai*G2*T2*alpha1*ht_21*rho_mix*u**2 - G1*G2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 + G1*G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 - G1*alpha1*alpha2*perimeter*rho1*tau_w_mix*u**3 - G2*a1**2*alpha1*alpha2*dAdx*rho1*rho2*u**3 + G2*a1**2*alpha1*alpha2*dAdx*rho1*rho_mix*u**3 - G2*a1**2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u - G2*a1**2*alpha2**2*dAdx*rho1*rho2*u**3 + G2*a1**2*alpha2**2*dAdx*rho1*rho_mix*u**3 - G2*a1**2*alpha2**2*perimeter*rho1*tau_w_mix*u + G2*alpha1*alpha2*perimeter*rho2*tau_w_mix*u**3 + a1**2*alpha1*alpha2*dAdx*rho1*rho_mix*u**3 - a1**2*alpha1*alpha2*perimeter*rho1*tau_w_mix*u + a1**2*alpha2**2*dAdx*rho1*rho_mix*u**3 - a1**2*alpha2**2*perimeter*rho1*tau_w_mix*u)/(A*a1**2*a2**2)
-    # det_N5 = 1.0*alpha1*alpha2*rho1*rho2*u**3*(-A*Ai*G1*T1*a2**2*ht_21*rho2 + A*Ai*G1*T2*a2**2*ht_21*rho2 + A*Ai*G2*T1*a1**2*ht_21*rho1 - A*Ai*G2*T2*a1**2*ht_21*rho1 + G1*a2**2*alpha1*perimeter*rho2*tau_w_mix*u + G2*a1**2*alpha2*perimeter*rho1*tau_w_mix*u - a1**2*a2**2*alpha1*dAdx*rho1*rho2*u - a1**2*a2**2*alpha2*dAdx*rho1*rho2*u + a1**2*alpha2*perimeter*rho1*tau_w_mix*u + a2**2*alpha1*perimeter*rho2*tau_w_mix*u)/(A*a1**2*a2**2)
-    # det_N6 = 1.0*alpha1*alpha2*rho1*rho2*u**3*(A*Ai*G1*T1*a2**2*ht_21*rho2*rho_mix*u - A*Ai*G1*T2*a2**2*ht_21*rho2*rho_mix*u - A*Ai*G2*T1*a1**2*ht_21*rho1*rho_mix*u + A*Ai*G2*T2*a1**2*ht_21*rho1*rho_mix*u - G1*a2**2*alpha1*perimeter*rho1*rho2*tau_w_mix*u**2 - G2*a1**2*alpha2*perimeter*rho1*rho2*tau_w_mix*u**2 + a1**2*a2**2*alpha1*dAdx*rho1*rho2*rho_mix*u**2 - a1**2*a2**2*alpha1*perimeter*rho1*rho2*tau_w_mix + a1**2*a2**2*alpha2*dAdx*rho1*rho2*rho_mix*u**2 - a1**2*a2**2*alpha2*perimeter*rho1*rho2*tau_w_mix)/(A*a1**2*a2**2)
-    # det_N7 = 1.0*alpha2*rho2*u**2*(A*Ai*G1*T1*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 - A*Ai*G1*T2*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 - A*Ai*G2*T1*a1**2*alpha1*ht_21*rho1**2*u**2 - A*Ai*G2*T1*a1**2*alpha2*ht_21*rho1*rho2*u**2 + A*Ai*G2*T1*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 + A*Ai*G2*T2*a1**2*alpha1*ht_21*rho1**2*u**2 + A*Ai*G2*T2*a1**2*alpha2*ht_21*rho1*rho2*u**2 - A*Ai*G2*T2*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 - A*Ai*T1*a1**2*a2**2*alpha1*ht_21*rho1*rho2 - A*Ai*T1*a1**2*a2**2*alpha2*ht_21*rho1*rho2 + A*Ai*T1*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 + A*Ai*T1*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 + A*Ai*T2*a1**2*a2**2*alpha1*ht_21*rho1*rho2 + A*Ai*T2*a1**2*a2**2*alpha2*ht_21*rho1*rho2 - A*Ai*T2*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 - A*Ai*T2*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 - G1*a2**2*alpha1**2*perimeter*rho1*rho2*tau_w_mix*u**3 - G2*a1**2*alpha1*alpha2*perimeter*rho1**2*tau_w_mix*u**3 + a1**2*a2**2*alpha1**2*dAdx*rho1**2*rho2*u**3 + a1**2*a2**2*alpha1*alpha2*dAdx*rho1**2*rho2*u**3 - a1**2*alpha1*alpha2*perimeter*rho1**2*tau_w_mix*u**3 - a2**2*alpha1**2*perimeter*rho1*rho2*tau_w_mix*u**3)/(A*a1**2*a2**2)
-    # det_N8 = 1.0*alpha1*rho1*u**2*(A*Ai*G1*T1*a2**2*alpha1*ht_21*rho1*rho2*u**2 - A*Ai*G1*T1*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 + A*Ai*G1*T1*a2**2*alpha2*ht_21*rho2**2*u**2 - A*Ai*G1*T2*a2**2*alpha1*ht_21*rho1*rho2*u**2 + A*Ai*G1*T2*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 - A*Ai*G1*T2*a2**2*alpha2*ht_21*rho2**2*u**2 - A*Ai*G2*T1*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 + A*Ai*G2*T2*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 + A*Ai*T1*a1**2*a2**2*alpha1*ht_21*rho1*rho2 + A*Ai*T1*a1**2*a2**2*alpha2*ht_21*rho1*rho2 - A*Ai*T1*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 - A*Ai*T1*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 - A*Ai*T2*a1**2*a2**2*alpha1*ht_21*rho1*rho2 - A*Ai*T2*a1**2*a2**2*alpha2*ht_21*rho1*rho2 + A*Ai*T2*a1**2*alpha2*ht_21*rho1*rho_mix*u**2 + A*Ai*T2*a2**2*alpha1*ht_21*rho2*rho_mix*u**2 - G1*a2**2*alpha1*alpha2*perimeter*rho2**2*tau_w_mix*u**3 - G2*a1**2*alpha2**2*perimeter*rho1*rho2*tau_w_mix*u**3 + a1**2*a2**2*alpha1*alpha2*dAdx*rho1*rho2**2*u**3 + a1**2*a2**2*alpha2**2*dAdx*rho1*rho2**2*u**3 - a1**2*alpha2**2*perimeter*rho1*rho2*tau_w_mix*u**3 - a2**2*alpha1*alpha2*perimeter*rho2**2*tau_w_mix*u**3)/(A*a1**2*a2**2)
-
-    # # Compute determinants
-    det_D = det(A_mat)
-    det_N1 = det(M1)
-    det_N2 = det(M2)
-    det_N3 = det(M3)
-    det_N4 = det(M4)
-    det_N5 = det(M5)
-    det_N6 = det(M6)
-    det_N7 = det(M7)
-    det_N8 = det(M8)
-    # det_D = det_sympy_actual
-
-
+    
+    rhs = jnp.linalg.solve(A_mat, b_vec)
     # jax.debug.print("x={x}, det={det_D}, Ma={Ma_mix}, delta_det={dd}", x=x, det_D=det_D, Ma_mix=u/a_mix, dd=det_D-det_sympy_actual)
 
-    # jax.debug.print("x={x} | Ma={Ma} | det={D} | d={d}", x=x, Ma=u/a_mix,D=det_D,d=d_2,)
+    # jax.debug.print(
+    #     "x={x}, Ma={Ma},det={D}", x=x, Ma=u/a_mix,D=det_D
+    # )
     # jax.debug.print(
     #     "x={x}, Ma={Ma}, Ma_st={Ma_st}, det={D}", x=x, Ma=u/a_mix, Ma_st=u/a_mix_stadke,D=det_D
     # )
 
     # jax.debug.print("x={x} | determinant={D} |  Ma={Ma_mix}", Ma_mix=u/a_mix, D=det_D, x=x)
 
-    N = [det_N1, det_N2, det_N3, det_N4, det_N5, det_N6, det_N7, det_N8]
-    N = jnp.array(N)
+    
     # --- Autonomous system: dx/dτ = D, dy/dτ = N_i ---
-    rhs = jnp.array([det_N1 / det_D, det_N2 / det_D, det_N3 / det_D, det_N4 / det_D, det_N5 / det_D, det_N6 / det_D, det_N7 / det_D, det_N8 / det_D])
-    rhs_autonomous = jnp.array([det_D, det_N1, det_N2, det_N3, det_N4, det_N5, det_N6, det_N7, det_N8])
-    # jax.debug.print("x={x} | determinant={D} |  Ma={Ma_mix}", Ma_mix=u/a_mix, D=det_D, x=x)
+    # rhs = jnp.array([det_N1 / det_D, det_N2 / det_D, det_N3 / det_D, det_N4 / det_D, det_N5 / det_D, det_N6 / det_D, det_N7 / det_D, det_N8 / det_D])
+    # rhs_autonomous = jnp.array([det_D, det_N1, det_N2, det_N3, det_N4, det_N5, det_N6, det_N7, det_N8])
 
     # Export data
     out = {
@@ -234,7 +176,7 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
         "s1":s1,
         "s2":s2,
         "rhs": rhs,
-        "rhs_autonomous": rhs_autonomous,
+        # "rhs_autonomous": rhs_autonomous,
         "area": A,
         "dAdx": dAdx,
         "diameter": diameter,
@@ -248,7 +190,6 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
         # "p02": p02,
         # "T02": T02,
         # "d02": rho02,
-        "rho_mix":rho_mix,
         "a_mix":a_mix,
         "Ma2": u / a2,
         "Ma_mix":u / a_mix,
@@ -258,7 +199,7 @@ def nozzle_homogeneous_non_equilibrium_autonomous(tau, Y, args):
         "A_mat": A_mat,
         "b_vec": b_vec,
         "D": det_D,
-        "N": N,
+        # "N": N,
         "m_dot": u * rho_mix * A,
     }
 
@@ -321,37 +262,6 @@ def get_wall_viscous_stress(darcy_friction_factor, density, velocity):
     """
     return 0.125 * darcy_friction_factor * density * velocity**2
 
-def ranz_marshall_htc(
-        alpha_gas,
-        state_gas,
-        state_liquid,
-        We=12
-):
-    # Calculate relative velocity
-    # sigma_l = state_liquid["surface_tension"]
-    sigma_l = 0.072
-    rho_l = state_liquid["rho"]
-    _, droplet_d = interfacial_area(alpha_gas)
-    relative_velocity = ((We*sigma_l)/(rho_l*droplet_d)) ** 0.5
-    
-    # Calculate relative Re
-    viscosity_g = state_gas["mu"]
-    Re_rel = relative_velocity * droplet_d / viscosity_g
-
-    # Calculate Pr
-    cp_l = state_liquid["cp"]
-    k_l = state_liquid["k"]
-    viscosity_l = state_liquid["mu"]
-    Pr_l = cp_l *  viscosity_l * rho_l / k_l
-
-    Nu_g = 2.0 + 0.6 * (Re_rel ** 0.5) * (Pr_l ** (1/3))
-
-    htc_g = k_l * Nu_g / droplet_d 
-
-    # jax.debug.print("relative velocity={rv} | Re_r={rer}", rv=relative_velocity, rer=Re_rel)
-
-
-    return htc_g
 
 # ------------------------------------------------------------------
 # Describe the geometry of the converging diverging nozzle
@@ -491,15 +401,12 @@ def get_nozzle_elliot_old(
 
 def get_nozzle_elliot(
     length,
-    convergent_length=0.09940,
-    divergent_length=0.16652,
-    radius_in=0.0254778,
-    radius_throat=0.00655,
-    radius_out=0.01413,
-    throat_first_length = 0.04223,
-    radius_throat_in = 0.007952,
-    throat_second_length = 0.011512,
-    radius_throat_out = 0.0068617,
+    total_length=150.93e-3,
+    convergent_length=99.40e-3,
+    divergent_length=97.18e-3,
+    radius_in=50.96/2*1e-3,
+    radius_throat=13.12/2*1e-3,
+    radius_out=22.21e-3,
 ):
     """
     JAX-compatible version of get_nozzle_elliot.
@@ -507,7 +414,10 @@ def get_nozzle_elliot(
     """
 
     # Geometry constants
-
+    throat_second_length = 11.51e-3
+    throat_first_length = 42.23e-3
+    radius_throat_in = 15.90/2 * 1e-3
+    radius_throat_out = 13.72/2 * 1e-3
 
     def region_convergent(length):
         # area = jnp.pi * (radius_in + ((radius_throat_in - radius_in) / convergent_length) * length) ** 2
@@ -639,6 +549,8 @@ def get_nozzle_elliot_wrong(
 
     return jax.lax.switch(idx, funcs, length)
 
+
+
 def interfacial_area_old(alpha, alpha_b=0.3, alpha_d=0.7, Nb=1e10, Nd=1e8):
     """
     Compute Ai and equivalent spherical diameter based on alpha.
@@ -700,12 +612,7 @@ def interfacial_area(alpha, alpha_b=0.3, alpha_d=0.7, Nb=1e10, Nd=1e8):
         None
     )
 
-    N = jnp.maximum(N, 1e-30)
-
     d = jnp.sqrt(Ai / (N * jnp.pi))
-
-    d = jnp.clip(d, 1e-9, 1.0)
-    Ai = Ai
     return Ai, d
 
 
@@ -766,114 +673,3 @@ def get_speed_of_sound_mixture_stadke(alpha1, a1, rho1, alpha2, a2, rho2):
     denominator = term1 + term2 
 
     return jnp.max(jnp.sqrt(1.0 / denominator))
-
-
-# def compute_inlet_state_hne(params_model):
-#     fluid1 = params_model.fluid1
-#     fluid2 = params_model.fluid2
-
-#     state1_in_tot = fluid1.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T01_in)
-#     state2_in_tot = fluid2.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T02_in)
-    
-#     def residual(p, _):
-#         st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
-#         a, h = st["a"], st["h"]
-#         return h0 - h - 0.5 * (a * Ma)**2
-    
-    
-    
-    
-#     p_in, rho1_in, rho2_in, h1_in, h2_in = (
-#         state1_in["p"],
-#         state1_in["rho"],
-#         state2_in["rho"],
-#         state1_in["h"],
-#         state2_in["h"]
-#     )
-#     G1, a1 = state1_in["G"], state1_in["a"]
-#     q_in = (1)/(1 + params_model.mixture_ratio)
-#     alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
-#     alpha1_in = 1 - alpha2_in
-
-#     # h = st["h"]
-#     G2, a2 = state2_in["G"], state2_in["a"]
-
-#     a_in_mix = get_speed_of_sound_mixture(G1, alpha1_in, a1, rho1_in, G2, alpha2_in, a2, rho2_in)
-
-#     u_in_crit = Ma_in_cr * a_in_mix
-
-#     x_in = 1e-9
-
-#     y = jnp.array([x_in, alpha1_in, alpha2_in, rho1_in, rho2_in, u_in_crit, p_in, h1_in, h2_in])
-
-#     return y
-
-
-def compute_inlet_state_hne(p0, T01, T02, Ma, R, fluid1, fluid2, mixture_ratio):
-    jax.debug.print("p={p}, T1={T01}, T2={T02}, Ma={Ma}",p=p0, T01=T01, T02=T02, Ma=Ma)
-
-    # jax.debug.print("fluid1={f1} | fluid2={f2}", f1=fluid1, f2=fluid2)
-    st01 = fluid1.get_state(jxp.PT_INPUTS, p0, T01)
-    # st01.block_until_ready()
-
-    jax.block_until_ready(st01)
-
-    s01, h01 = st01["s"], st01["h"]
-
-    st02 = fluid2.get_state(jxp.PT_INPUTS, p0, T02)
-    jax.block_until_ready(st02)
-
-    # st02.block_until_ready()
-    s02= st02["s"]
-
-    q_in = 1/ (1 + R)
-
-    # Scalar residual for Bisection
-    def residual1(p, _):
-        st = fluid1.get_state(jxp.PSmass_INPUTS, p, s01)
-        h, G1, a1, rho1 = st["h"], st["G"], st["a"], st["d"]
-
-        st = fluid2.get_state(jxp.PSmass_INPUTS, p, s02)
-        G2, a2, rho2 = st["G"], st["a"], st["d"]
-
-        alpha2 = 1 / (1 + ((1 - q_in) / q_in) * (rho2 / rho1))
-        alpha1 = 1 - alpha2
-
-        jax.debug.print("alpha1={alpha1}, alpha2={alpha2}",alpha1=alpha1, alpha2=alpha2)
-        a_mix = get_speed_of_sound_mixture(G1, alpha1, a1, rho1, G2, alpha2, a2, rho2)
-        f = h01 - h - 0.5 * (Ma*a_mix)**2
-        jax.debug.print("f={a}", a=f)
-        
-        return h01 - h - 0.5 * (Ma*a_mix)**2
-
-    solver = optx.Newton(rtol=1e-6, atol=1e-6)
-    lower1, upper1 = 0.1 * p0, p0
-    sol1 = optx.root_find(residual1, solver, y0=0.99 * p0, options={"lower": lower1, "upper": upper1})
-    state1_in = fluid1.get_state(jxp.PSmass_INPUTS, sol1.value, s01)
-    state2_in = fluid2.get_state(jxp.PSmass_INPUTS, sol1.value, s02)
-
-    p_in, rho1_in, rho2_in, h1_in, h2_in = (
-            state1_in["p"],
-            state1_in["rho"],
-            state2_in["rho"],
-            state1_in["h"],
-            state2_in["h"]
-        )
-    
-    G1, a1 = state1_in["G"], state1_in["a"]
-    q_in = (1)/(1 + mixture_ratio)
-    alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
-    alpha1_in = 1 - alpha2_in
-
-    # h = st["h"]
-    G2, a2 = state2_in["G"], state2_in["a"]
-
-    a_in_mix = get_speed_of_sound_mixture(G1, alpha1_in, a1, rho1_in, G2, alpha2_in, a2, rho2_in)
-
-    u_in = Ma * a_in_mix
-
-    # x_in = 1e-9
-
-    y = jnp.array([alpha1_in, alpha2_in, rho1_in, rho2_in, u_in, p_in, h1_in, h2_in])
-
-    return y

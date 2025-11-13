@@ -886,7 +886,7 @@ scipy = ">=1.12"
 
 [[package]]
 name = "jaxprop"
-version = "0.4.3"
+version = "0.4.1"
 description = "JAX-compatible thermodynamic property calculations."
 optional = false
 python-versions = ">=3.11,<3.14"
@@ -1612,32 +1612,30 @@ sphinx = ">=6"
 
 [[package]]
 name = "nurbspy"
-version = "1.2.2"
+version = "1.2.4"
 description = "A lightweight library for NURBS curves and surfaces"
 optional = false
-python-versions = ">=3.11,<3.14"
+python-versions = "<3.14,>=3.11"
 groups = ["main"]
-files = []
-develop = true
+files = [
+    {file = "nurbspy-1.2.4-py3-none-any.whl", hash = "sha256:942ddb8e04d92b41372d434c2655aecd2e4acd5e74bd97013d90db8d5974c29b"},
+    {file = "nurbspy-1.2.4.tar.gz", hash = "sha256:c26ca2b8c7a26f8d62c042cf3d70035347638c9975d22f0a4c9af279d0b5dedd"},
+]
 
 [package.dependencies]
-cycler = "^0.12.1"
-diffrax = "^0.7.0"
-equinox = "^0.12.0"
-jax = "^0.6.0"
-jaxlib = "^0.6.0"
-matplotlib = "^3.10.6"
-numba = "^0.62.0"
-numpy = "^2.3.0"
-optimistix = "^0.0.10"
-PyYAML = "^6.0.2"
-quadax = "^0.2.10"
-scipy = "^1.16.1"
-toml = "^0.10.2"
-
-[package.source]
-type = "directory"
-url = "../nurbspy"
+cycler = ">=0.12.1,<0.13.0"
+diffrax = ">=0.7.0,<0.8.0"
+equinox = ">=0.12.0,<0.13.0"
+jax = ">=0.6.0,<0.7.0"
+jaxlib = ">=0.6.0,<0.7.0"
+matplotlib = ">=3.10.6,<4.0.0"
+numba = ">=0.62.0,<0.63.0"
+numpy = ">=2.3.0,<3.0.0"
+optimistix = ">=0.0.10,<0.0.11"
+PyYAML = ">=6.0.2,<7.0.0"
+quadax = ">=0.2.10,<0.3.0"
+scipy = ">=1.16.1,<2.0.0"
+toml = ">=0.10.2,<0.11.0"
 
 [[package]]
 name = "openpyxl"
@@ -3237,4 +3235,4 @@ test = ["pytest (>=6.0.0)", "setuptools (>=65)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "6f6f1610f3bfaf01bce9ddd760b68569becc22d89359555feb6d21e1cccfd3ed"
+content-hash = "3eddc0ad6624362fdd0ff8f4ae5f1f5bb2ddc03a4db1cdcfaab88d11389c2443"
