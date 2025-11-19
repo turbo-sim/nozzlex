@@ -383,7 +383,7 @@ def HRM_source_term(rho, x, x_eq, rho_v, p_cr, p_sat_sin, p):
     alpha = rho * x / rho_v
     phi = np.abs((p_sat_sin - p)/(p_cr - p_sat_sin))
     teta = teta_0 * alpha**a * phi**b
-    # teta = 1e-4
+    teta = 1e-4
 
     return rho*(x_eq-x)/teta
 
@@ -456,8 +456,8 @@ def pipeline_steady_state_1D(
         u_possible = mach_possible*properties_in.a
         m_impossible = density_in*u_impossible*area_in
         m_possible = density_in*u_possible*area_in
-        m_possible = 0.023
-        m_impossible = 0.023
+        m_possible = 0.024
+        m_impossible = 0.024
         m_guess = (m_impossible+m_possible) / 2
         u_guess = m_guess / (density_in * area_in)
 
@@ -584,7 +584,7 @@ def pipeline_steady_state_1D(
             return dy, out
 
         except Exception as e:
-            print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
+            # print(f"[ODEFUN ERROR @ x={x:.4f}] {e}")
             return [np.nan, np.nan, np.nan, np.nan], None # forces integrator to stop
 
     def stop_at_singularity(t, y):

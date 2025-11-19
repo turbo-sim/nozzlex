@@ -552,36 +552,84 @@ def chebyshev_lobatto_interpolate_and_derivative(x_nodes, y_nodes, x_eval):
     else:
         return jax.vmap(_scalar_interp_and_deriv)(x_eval)
 
-
 def compute_static_state(p0, h0, Ma, fluid):
-    # --- Reference stagnation state ---
     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
     s0 = st0["s"]
 
-    # --- Define residual system: f(p, h) = [f1, f2] ---
-    def residual(x, _):
-        p, h = x
+    def residual_reparam(y, _):
+        lnp, hr = y
+        p = jnp.exp(lnp)
+        h = hr * h0
         st = fluid.get_state(jxp.HmassP_INPUTS, h, p)
-        a, s = st["a"], st["s"]
-        f1 = 1.0 - (h + 0.5 * (a * Ma) ** 2) / h0   # energy balance
-        f2 = s/s0 - 1.0                             # isentropic condition
+        a = st["a"]; s = st["s"]
+        f1 = 1.0 - (h + 0.5*(a*Ma)**2)/h0
+        f2 = s/s0 - 1.0
         return jnp.array([f1, f2])
 
-    # --- Initial guess ---
-    # start slightly below stagnation pressure, same enthalpy
-    x0 = jnp.array([0.95*p0, 0.95*h0])
+    p_vals = jnp.linspace(0.8*p0, 1.0*p0, 6)
+    h_vals = jnp.linspace(0.8*h0, 1.0*h0, 6)
+    p_grid, h_grid = jnp.meshgrid(p_vals, h_vals)
 
-    # --- Solve ---
-    solver = optx.GaussNewton(rtol=1e-3, atol=1e-3)
-    sol = optx.root_find(residual, solver, y0=x0)
+    def eval_residual_at(p, h):
+        y_test = jnp.array([jnp.log(p), h / h0])
+        r = residual_reparam(y_test, None)
+        return jnp.linalg.norm(r)
 
-    # --- Evaluate final state ---
-    p, h = sol.value
-    state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
-    return state
+    residual_grid = jax.vmap(
+        jax.vmap(eval_residual_at)
+    )(p_grid, h_grid)
+
+    idx = jnp.argmin(residual_grid)
+    i, j = jnp.unravel_index(idx, residual_grid.shape)
+
+    p_best = p_grid[i, j]
+    h_best = h_grid[i, j]
+
+    y0 = jnp.array([
+        jnp.log(p_best),
+        h_best / h0
+    ])
+
+    solver = optx.GaussNewton(rtol=1e-6, atol=1e-6)
+    sol = optx.root_find(residual_reparam, solver, y0=y0, max_steps=2000)
+
+    # Extract final state
+    lnp, hr = sol.value
+    p, h = jnp.exp(lnp), hr*h0
+
+    return fluid.get_state(jxp.HmassP_INPUTS, h, p)
+
+# def compute_static_state(p0, h0, Ma, fluid):
+#     # --- Reference stagnation state ---
+#     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
+#     s0 = st0["s"]
+
+#     # --- Define residual system: f(p, h) = [f1, f2] ---
+#     def residual(x, _):
+#         p, h = x
+#         st = fluid.get_state(jxp.HmassP_INPUTS, h, p)
+#         a, s = st["a"], st["s"]
+#         f1 = 1.0 - (h + 0.5 * (a * Ma) ** 2) / h0   # energy balance
+#         # f1 = h0 - (h + 0.5 * (a * Ma) ** 2)
+#         f2 = s/s0 - 1.0                             # isentropic condition
+#         # f2 = s - s0
+#         return jnp.array([f1, f2])
+
+#     # --- Initial guess ---
+#     # start slightly below stagnation pressure, same enthalpy
+#     x0 = jnp.array([p0*0.99, h0*0.99])
+
+#     # --- Solve ---
+#     solver = optx.GaussNewton(rtol=1e-3, atol=1e-3)
+#     sol = optx.root_find(residual, solver, y0=x0, max_steps=2000)
+
+#     # --- Evaluate final state ---
+#     p, h = sol.value
+#     state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
+#     return state
 
 
-# # ---------- Compute static state from stagnation and Mach number ----------
+# ---------- Compute static state from stagnation and Mach number ----------
 # def compute_static_state(p0, h0, Ma, fluid):
 #     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
 #     s0 = st0["s"]
@@ -610,7 +658,7 @@ def compute_static_state(p0, h0, Ma, fluid):
 #         return h0 - h - 0.5 * (a * Ma)**2
 
 #     # Solve for static enthalpy
-#     solver = optx.Bisection(rtol=1e-3, atol=1e-3)
+#     solver = optx.GaussNewton(rtol=1e-3, atol=1e-3)
 #     # You can estimate lower/upper bounds around h0
 #     lower, upper = 0.4 * h0, h0
 #     sol = optx.root_find(residual, solver, y0=h0, options={"lower": lower, "upper": upper})
@@ -649,7 +697,7 @@ def nozzle_single_phase_max_mach(
     ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
     event = dfx.Event(
         cond_fn=eval_end_of_domain_event,
-        root_finder=optx.Bisection(rtol=1e-10, atol=1e-10),
+        root_finder=optx.Bisection(rtol=1e-9, atol=1e-9),
     )
 
     saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)

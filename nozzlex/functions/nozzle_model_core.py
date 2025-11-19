@@ -410,11 +410,12 @@ def symmetric_nozzle_geometry(x, L, A_inlet=0.30, A_throat=0.15):
 def linear_convergent_divergent_nozzle(
     x,
     L,
-    L_convergent=(83.50e-3 - 56.15e-3),
-    height_in=5e-3,
-    height_throat=0.12e-3,
-    height_out=0.72e-3,
-    width=3e-3,
+    # L_convergent=(83.50e-3 - 56.15e-3),
+    L_convergent=26.983e-3,
+    height_in=4.71379e-3,
+    height_throat=0.120361e-3,
+    height_out=0.7015129e-3,
+    width=3.1864e-3,
 ):
     """
     JAX-safe linear convergent–divergent nozzle (planar geometry).
