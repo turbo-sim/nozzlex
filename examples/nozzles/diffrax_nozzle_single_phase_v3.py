@@ -45,7 +45,7 @@ def transonic_nozzle_single_phase(
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    Ma_in_cr = compute_critical_inlet(Ma_lower=0.001, Ma_upper=0.4, params_model=params_model, params_solver=params_ivp)
+    Ma_in_cr = compute_critical_inlet(Ma_lower=0.000001, Ma_upper=0.4, params_model=params_model, params_solver=params_ivp)
 
     state_in = compute_static_state(
         params_model.p0_in,
@@ -183,10 +183,10 @@ fluid_name = "CO2"
 backend = "HEOS"
 h_min = 10e3  # J/kg
 h_max = 550e3  # J/kg
-p_min = 7e5    # Pa
+p_min = 6e5    # Pa
 p_max = 150e5   # Pa
-N_h = 60
-N_p = 60
+N_h = 50
+N_p = 50
 
 if __name__ == "__main__":
 
@@ -197,16 +197,16 @@ if __name__ == "__main__":
     # -- 1. Find critical state with continuation --
 
     params_model = NozzleParams(
-        p0_in=91e5,  # Pa 
-        h0_in=310.0047e3,
+        p0_in=8600295,  # Pa 
+        h0_in=303204,
         # D_in=0.050,  # m
         # length=5.00,  # m
-        roughness=1e-6,  # m
+        roughness=6.787499e-6,  # m
         T_wall=300.0,  # K
         Ma_low=0.95,
         Ma_high=1.025,
         heat_transfer=0.0,
-        wall_friction=0.0,
+        wall_friction=1.0,  # 1.0 if friction has to be considered, 0.0 if not
         p_termination=p_min,
         # fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
         # fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
@@ -242,7 +242,7 @@ if __name__ == "__main__":
         atol=1e-8,
     )
 
-    L_nakagawa = 83.50e-3
+    L_nakagawa = 0.02698317 + 0.0524755
     params_model = replace_param(params_model, "length", L_nakagawa)
 
 
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([92, 91, 90]) * 1e5
+    input_array = jnp.asarray([8600295])
     colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
     solution_list = []
     for i, p0_in in enumerate(input_array):

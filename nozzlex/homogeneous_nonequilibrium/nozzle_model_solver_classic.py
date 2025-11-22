@@ -70,36 +70,31 @@ from typing import Any, Callable
 
 jax.config.update("jax_enable_x64", True)
 
-from .nozzle_model_core import (
-    get_speed_of_sound_mixture,
-    nozzle_homogeneous_non_equilibrium_autonomous,
-    nozzle_homogeneous_non_equilibrium_core,
-    compute_inlet_state_hne,
-)
+from .nozzle_model_core_classic import get_speed_of_sound_mixture, nozzle_homogeneous_non_equilibrium_classic
 
 
 # shorthand factory for float64 arrays
 def f64(value):
     return eqx.field(
-        default_factory=lambda: jnp.array(value, dtype=jnp.float64), static=False
+        default_factory=lambda: jnp.array(value, dtype=jnp.float64),
+        static=False
     )
-
 
 class NozzleParams(eqx.Module):
     fluid1: Any = eqx.field(static=False)
     fluid2: Any = eqx.field(static=False)
     geometry: Callable = eqx.field(static=True)
-    p0_in: jnp.ndarray = f64(1.0e5)  # Pa
-    T01_in: jnp.ndarray = f64(300)
-    T02_in: jnp.ndarray = f64(300)
-    length: jnp.ndarray = f64(5.00)  # m
-    roughness: jnp.ndarray = f64(1e-6)  # m
-    Ma_in: jnp.ndarray = f64(0.005)
+    p0_in: jnp.ndarray = f64(1.0e5)       # Pa
+    T01_in:jnp.ndarray = f64(300)
+    T02_in:jnp.ndarray = f64(300)
+    length: jnp.ndarray = f64(5.00)       # m
+    roughness: jnp.ndarray = f64(1e-6)    # m
+    Ma_in: jnp.ndarray = f64(0.1)
     Ma_low: jnp.ndarray = f64(0.05)
     Ma_high: jnp.ndarray = f64(0.99)
     heat_transfer: jnp.ndarray = f64(0.0)
     wall_friction: jnp.ndarray = f64(0.0)
-    mixture_ratio: jnp.ndarray = f64(50)
+    mixture_ratio:jnp.ndarray  = f64(50)
 
 
 class BVPSettings(eqx.Module):
@@ -114,10 +109,8 @@ class BVPSettings(eqx.Module):
     warmup_steps: int = eqx.field(static=True, default=0)
     solve_mode: str = eqx.field(static=True, default="mach_crit")  # or "mach_crit"
 
-
 class IVPSettings(eqx.Module):
     """Settings for marching initial value problem solvers."""
-
     solver_name: str = eqx.field(static=True, default="Dopri5")
     adjoint_name: str = eqx.field(static=True, default="DirectAdjoint")
     number_of_points: int = eqx.field(static=True, default=50)
@@ -141,7 +134,7 @@ SOLVER_MAPPING = {
     "GaussNewton": optx.GaussNewton,
     "Dogleg": optx.Dogleg,
     "LevenbergMarquardt": optx.LevenbergMarquardt,
-    "Bisection": optx.Bisection,
+    "Bisection":optx.Bisection
 }
 
 
@@ -162,12 +155,12 @@ SOLVER_MAPPING = {
 #     state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
 #     return state
 
-# Specific for
+# Specific for 
 
 # def compute_static_state(p0, T01, T02, Ma, R, fluid1, fluid2):
 #     jax.debug.print("p={p}, T1={T01}, T2={T02}, Ma={Ma}",p=p0, T01=T01, T02=T02, Ma=Ma)
 #     st01 = fluid1.get_state(jxp.PT_INPUTS, p0, T01)
-#     s01, h01, G1, a1, rho1 = st01["s"], st01["h"], st01["G"], st01["a"], st01["d"]
+#     s01, h01, G1, a1, rho1 = st01["s"], st01["h"], st01["G"], st01["a"], st01["d"] 
 
 #     st02 = fluid2.get_state(jxp.PT_INPUTS, p0, T02)
 #     s02, G2, a2, rho2 = st02["s"], st02["G"], st02["a"], st02["d"]
@@ -205,12 +198,11 @@ SOLVER_MAPPING = {
 #     state2 = fluid2.get_state(jxp.PSmass_INPUTS, sol1.value, s02)
 #     return state1, state2
 
-
-# @eqx.filter_jit
-def nozzle_homogeneuous_non_equilibrium(params_model, params_solver):
+@eqx.filter_jit
+def  nozzle_homogeneuous_non_equilibrium(params_model, params_solver):
     """
     1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
-    State vector: y = [x, alpha1, alpha2, rho1, rho2, u, p, h1, h2].
+    State vector: y = [alpha1, alpha2, rho1, rho2, u, p, h1, h2].
     """
     # --- inlet state ---
     # state1_in, state2_in = compute_static_state(
@@ -234,282 +226,134 @@ def nozzle_homogeneuous_non_equilibrium(params_model, params_solver):
         state1_in["rho"],
         state2_in["rho"],
         state1_in["h"],
-        state2_in["h"],
+        state2_in["h"]
     )
-    q_in = (1) / (1 + params_model.mixture_ratio)
+
+    q_in = (1)/(1 + params_model.mixture_ratio)
+
     G1, a1 = state1_in["G"], state1_in["a"]
-    alpha2 = 1 / (1 + ((1 - q_in) / q_in) * (rho1_in / rho2_in))
-    alpha1 = 1 - alpha2
+    alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho1_in / rho2_in))
+    alpha1_in = 1 - alpha2_in
 
     # h = st["h"]
     G2, a2 = state2_in["G"], state2_in["a"]
 
-    a_in_mix = get_speed_of_sound_mixture(
-        G1, alpha1, a1, rho1_in, G2, alpha2, a2, rho2_in
-    )
+    a_in_mix = get_speed_of_sound_mixture(G1, alpha1_in, a1, rho1_in, G2, alpha2_in, a2, rho2_in)
 
-    u_in = params_model.Ma_in * a_in_mix
-    q_in = (1) / (1 + params_model.mixture_ratio)
-    alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
-    alpha1_in = 1 - alpha2_in
+    u_in = (params_model.Ma_in * a_in_mix)
 
-    x_in = 1e-9  # start slightly after inlet
-    y0 = jnp.array(
-        [x_in, alpha1_in, alpha2_in, rho1_in, rho2_in, u_in, p_in, h1_in, h2_in]
-    )
-
-    # --- solver setup ---
-    t0, t1 = 1e-9, 1e9
-    solver = jxp.make_diffrax_solver(params_solver.solver_name)
-    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
-    term = dfx.ODETerm(eval_ode_rhs)
-    ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
-
-    event = dfx.Event(
-        cond_fn=eval_end_of_domain_event,
-        root_finder=optx.Newton(rtol=1e-6, atol=1e-6),
-    )
-
-    # # --- first solve (find domain end) ---
-    # saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)
-    # sol = dfx.diffeqsolve(
-    #     term,
-    #     solver,
-    #     t0=t0,
-    #     t1=t1,
-    #     dt0=1e-9,
-    #     y0=y0,
-    #     args=params_model,
-    #     stepsize_controller=ctrl,
-    #     adjoint=adjoint,
-    #     saveat=saveat,
-    #     event=event,
-    #     max_steps=200_000,
-    # )
-
-    # --- first solve (find domain end) ---
-    saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)
-    # saveat = dfx.SaveAt(dense = True, fn=eval_ode_full)
-    sol = dfx.diffeqsolve(
-        term,
-        solver,
-        t0=0.0,
-        t1=t1,
-        dt0=1e-9,
-        y0=y0,
-        args=params_model,
-        stepsize_controller=ctrl,
-        adjoint=adjoint,
-        saveat=saveat,
-        event=event,
-        max_steps=200_000,
-        # throw=False,
-    )
-
-    # Relative error diagnostics
-    ts = jnp.linspace(sol.t0, sol.ts[0], 1000)
-
-    # Vectorize the first step: sol.evaluate(t) for all t in ts
-    evaluate_all = jax.vmap(sol.evaluate)
-    out2 = evaluate_all(ts)
-
-    # Vectorize the second step: apply the model to each (t, out)
-    model_all = jax.vmap(lambda t, y: eval_ode_full(t, y, params_model))
-    sol = model_all(ts, out2)
-
-    return sol
-
-
-@eqx.filter_jit
-def nozzle_homogeneuous_non_equilibrium_mach_out(params_model, params_solver):
-    """
-    1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
-    State vector: y = [x, alpha1, alpha2, rho1, rho2, u, p, h1, h2].
-    """
-    # --- inlet state ---
-    # state1_in, state2_in = compute_static_state(
-    #     params_model.p0_in,
-    #     params_model.T01_in,
-    #     params_model.T02_in,
-    #     params_model.Ma_in,
-    #     params_model.mixture_ratio,
-    #     params_model.fluid1,
-    #     params_model.fluid2
-    # )
-
-    # fluid1 = params_model.fluid1
-    # fluid2 = params_model.fluid2
-
-    # state1_in = fluid1.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T01_in)
-    # state2_in = fluid2.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T02_in)
-
-    # p_in, rho1_in, rho2_in, h1_in, h2_in = (
-    #     state1_in["p"],
-    #     state1_in["rho"],
-    #     state2_in["rho"],
-    #     state1_in["h"],
-    #     state2_in["h"]
-    # )
     # q_in = (1)/(1 + params_model.mixture_ratio)
-    # G1, a1 = state1_in["G"], state1_in["a"]
-    # alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
+    # alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho1_in / rho2_in))
     # alpha1_in = 1 - alpha2_in
 
-    # # h = st["h"]
-    # G2, a2 = state2_in["G"], state2_in["a"]
-
-    # a_in_mix = get_speed_of_sound_mixture(G1, alpha1_in, a1, rho1_in, G2, alpha2_in, a2, rho2_in)
-
-    # u_in = params_model.Ma_in * a_in_mix
-    y_variable = compute_inlet_state_hne(
-        params_model.p0_in,
-        params_model.T01_in,
-        params_model.T02_in,
-        params_model.Ma_in,
-        params_model.mixture_ratio,
-        params_model.fluid1,
-        params_model.fluid2,
-        params_model.mixture_ratio,
-    )
-
-    x_in = jnp.array([1e-9])  # start slightly after inlet
-    y0 = jnp.concatenate([x_in, y_variable])
+    x_in = 1e-9  # start slightly after inlet
+    y0 = jnp.array([alpha1_in, alpha2_in, rho1_in, rho2_in, u_in, p_in, h1_in, h2_in])
 
     # --- solver setup ---
-    t0, t1 = 1e-9, 1e9
+    t0, t1 = 1e-9, params_model.length
+    # t1, t0 = 0.0, 1.0 # not working!
     solver = jxp.make_diffrax_solver(params_solver.solver_name)
     adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
     term = dfx.ODETerm(eval_ode_rhs)
     ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
 
+    # --- event: stop at nozzle exit ---
+    # def eval_end_of_domain_event(t, y, args, **kwargs):
+    #     x = y[0]
+    #     L = args.length
+    #     # jax.debug.print("{y}", y = y)
+    #     out = nozzle_homogeneous_non_equilibrium_autonomous(0.0, y, args)
+    #     jax.debug.print("x={x}, L-x={leng},D={D}",x=x, leng=L-x, D = out.get("D"))
+    #     deter = jnp.min(out.get("D"))
+    #     return jnp.minimum(jnp.minimum(x, L - x), deter)
+
+    # def eval_end_of_domain_event(t, y, args, **kwargs):
+    #     x = y[0]
+    #     L = args.length
+
+    #     # Determinant condition
+    #     out = nozzle_homogeneous_non_equilibrium_autonomous(0.0, y, args)
+    #     Ma_mix = jnp.min(out.get("Ma_mix"))
+        
+    #     M = 5 - Ma_mix
+    #     # jax.debug.print("x={x}, L-x={leng},D={D}",x=x, leng=L-x, D = out.get("D"))
+
+    #     # Stack all event conditions
+    #     conditions = jnp.stack([x/L, 1 - x/L, M]) # D])
+    #     output = jnp.min(conditions)
+    #     # jax.debug.print("out={output}",output=output)
+    #     return output
+
+    
+    
+    # TODO: 
+    # def stop_at_zero_det(t, y):
+    #      = nozzle_homogeneous_non_equilibrium_core(y)
+    #     det_M = out["determinant"]
+    #     # print(f"t={t:.5f}, det={det_M:.5e}")
+    #     return det_M
+
     event = dfx.Event(
         cond_fn=eval_end_of_domain_event,
-        root_finder=optx.Newton(rtol=1e-6, atol=1e-6),
+        root_finder=optx.Newton(rtol=1e-12, atol=1e-12),
     )
 
-    # --- first solve (find domain end) ---
+
+
     # --- first solve (find domain end) ---
     saveat = dfx.SaveAt(t1=True, fn=eval_ode_full)
     sol = dfx.diffeqsolve(
         term,
         solver,
-        t0=t0,
+        t0=0.0,
         t1=t1,
-        dt0=1e-9,
+        dt0=1e-8,
         y0=y0,
         args=params_model,
         stepsize_controller=ctrl,
         adjoint=adjoint,
         saveat=saveat,
         event=event,
-        max_steps=200_000,
-        # throw=False,
+        max_steps=2_000_000,
     )
 
-    lb = jnp.array(t0)
-    ub = jnp.array(sol.ts[0])
+    # jax.debug.print("print{a}", a=sol.ys)
 
-    saveat = dfx.SaveAt(dense=True, fn=eval_ode_full)
-    sol = dfx.diffeqsolve(
-        term,
-        solver,
-        t0=t0,
-        t1=sol.ts[0],
-        dt0=1e-9,
-        y0=y0,
-        args=params_model,
-        stepsize_controller=ctrl,
-        adjoint=adjoint,
-        saveat=dfx.SaveAt(dense=True),
-        event=event,
-        max_steps=200_000,
-        # throw=False,
-    )
+    # # --- second solve (save fields) ---
+    # ts = jnp.linspace(t0+1e-12, sol.ts[-1], params_solver.number_of_points)
+    # saveat = dfx.SaveAt(ts=ts, t1=True, fn=eval_ode_full)
 
-    # fa = sol.evaluate(1e-2)
-    # jax.debug.print("fa={fa}",fa=fa)
+    # # ts = jnp.linspace(t0, sol.ts[-1], params_solver.number_of_points)
+    # # saveat = dfx.SaveAt( t1=True, fn=eval_ode_full)
+    # sol_dense = dfx.diffeqsolve(
+    #     term,
+    #     solver,
+    #     t0=t0,
+    #     t1=sol.ts[-1],
+    #     dt0=1e-8,
+    #     y0=y0,
+    #     args=params_model,
+    #     saveat=saveat,
+    #     stepsize_controller=ctrl,
+    #     adjoint=adjoint,
+    #     max_steps=200_000,
+    # )
 
-    # f_nested = sol.evaluate()
-    # f = lambda t: nozzle_homogeneous_non_equilibrium_autonomous(0.0, sol.evaluate(t), params_model)["Ma_mix"]
+    # return sol_dense
 
-    # def f(t, lb, ub):
-    #     jax.debug.print("t={t}", t=t)
-    #     t = jnp.clip(t, lb, ub)
-    #     return nozzle_homogeneous_non_equilibrium_autonomous(0.0, sol.evaluate(t), params_model)["Ma_mix"]
-    # def f_neasted(t):
-    #     jax.debug.print("t={t}", t=t)
-    #     return sol.evaluate(t)
+    return sol
 
-    # def f(t):
-    #     yy = f_neasted(t)
-    #     jax.debug.print("t={t}", t=t)
-    #     return nozzle_homogeneous_non_equilibrium_autonomous(0.0, yy, params_model)["Ma_mix"]
-
-    ts = jnp.linspace(lb, ub, 100)
-    kappa_yy = jax.vmap(lambda t: sol.evaluate(t))
-    yy = kappa_yy(ts)
-    f_max = jax.vmap(
-        lambda y, *args: nozzle_homogeneous_non_equilibrium_autonomous(
-            0.0, y, params_model
-        )["Ma_mix"]
-    )
-    kappa = f_max(yy)
-    kappa = jnp.max(kappa)
-    # jax.debug.print("{f}", f=kappa)
-
-    # # Define objective for optimistix
-    # def objective(x, args):
-    #     lb, ub = args
-    #     t = jnp.clip(x, lb, ub)
-    #     return -f(t)
-
-    # Initial guess
-    x0 = jnp.array(0.5 * (lb + ub))
-
-    # Use a stable optimizer
-    solver = optx.BFGS(rtol=1e-6, atol=1e-6)
-
-    # Run optimization
-    # sol = optx.minimise(lambda t:nozzle_homogeneous_non_equilibrium_autonomous(0.0, sol.evaluate(t), params_model)["Ma_mix"], solver, y0=x0) # , args=(lb, ub))
-    res = optx.minimise(
-        lambda t, *args: -nozzle_homogeneous_non_equilibrium_autonomous(
-            0.0, sol.evaluate(t), params_model
-        )["Ma_mix"],
-        solver,
-        y0=x0,
-    )
-
-    t_max = res.value
-    yy_max = sol.evaluate(t_max)
-    f_max = nozzle_homogeneous_non_equilibrium_autonomous(0.0, yy_max, params_model)[
-        "Ma_mix"
-    ]
-    kappa = jnp.max(kappa)
-    throat_position_elliot = 141.63e-3
-    x_max = nozzle_homogeneous_non_equilibrium_autonomous(0.0, yy_max, params_model)[
-        "x"
-    ]
-    condition = x_max > throat_position_elliot
-    # jax.debug.print("max_opt={fopt} | max_guess={f} | delta_mach={df}",df=f_max - kappa, fopt=f_max, f=kappa)
-    # jax.debug.print("M_max={fopt} | max in divergent={f}", fopt=f_max, f=condition)
-
-    return f_max
-    # return fa
 
 
 # -----------------------------------------------------------------------------
 # Helper ODE evaluation functions
 # -----------------------------------------------------------------------------
 def eval_ode_full(t, y, args):
-    return nozzle_homogeneous_non_equilibrium_autonomous(t, y, args)
+    return nozzle_homogeneous_non_equilibrium_classic(t, y, args)
 
 
 def eval_ode_rhs(t, y, args):
-    return nozzle_homogeneous_non_equilibrium_autonomous(t, y, args)["rhs_autonomous"]
-
-
-def eval_ode_mach(t, y, args):
-    return nozzle_homogeneous_non_equilibrium_autonomous(t, y, args)["Ma_mix"]
+    return nozzle_homogeneous_non_equilibrium_classic(t, y, args)["rhs"]
 
 
 # -----------------------------------------------------------------------------
@@ -521,21 +365,29 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
     Fully JAX-traceable (compatible with jit/tracers).
     """
 
+    # Residual using only jax operations and jxp for property evaluation
+    # def critical_mach_residual(u_in, params_model):
+    #     # update model with candidate Mach
+    #     pm = replace_param(params_model, "u_in", u_in)
+    #     jax.debug.print("Inlet tentative velocity is:{u}", u=u_in)
+    #     sol = nozzle_homogeneuous_non_equilibrium(pm, params_solver)
+    #     # min_det = jnp.min(sol.ys["D"])
+    #     # return min_det
+    #     mach_max = jnp.max(sol.ys["Ma_mix"])
+    #     jax.debug.print("{u}, {M}", u=u_in,M=mach_max)
+    #     return 1 - mach_max
     def critical_mach_residual(Mach_in, params_model):
         # update model with candidate Mach
-        pm_modified = replace_param(params_model, "Ma_in", Mach_in)
-        max_mach = nozzle_homogeneuous_non_equilibrium_mach_out(
-            pm_modified, params_solver
-        )
-        # max_mach = jnp.max(sol["Ma_mix"])
-        # x_final = sol["x"][-1]
-        # jax.debug.print("x={x} | M_in={M_in} | M_max={M}",x=x_final, M_in=Mach_in, M=max_mach,)
-        # jax.debug.print("Ma_max={M}", M=max_mach)
+        pm = replace_param(params_model, "Ma_in", Mach_in)
+        sol = nozzle_homogeneuous_non_equilibrium(pm, params_solver)
+        max_mach = jnp.max(sol.ys["Ma_mix"])
+        x_final = sol.ys["x"][-1]
+        # jax.debug.print("x={x},M_in={M_in}, M_max={M}",x=x_final, M_in=Mach_in, M=max_mach,)
         return 1.0 - max_mach
-
+    
     # Use JAX-safe Bisection
-    solver = optx.Bisection(rtol=1e-3, atol=1e-3)  # flip=True)
-    x0_initial = Ma_lower
+    solver = optx.Bisection(rtol=1e-12, atol=1e-12,) # flip=True)
+    x0_initial = 0.5 * (Ma_lower + Ma_upper)
     # x0_initial = u_lower
 
     # JAX-friendly root find (do not convert to float inside trace)
@@ -547,48 +399,173 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
         throw=True,
         options={"lower": Ma_lower, "upper": Ma_upper},
     )
-    Ma_crit = sol_root.value
+    u_in_crit = sol_root.value  
 
-    return Ma_crit
+    return u_in_crit
 
+def compute_critical_inlet_test(Ma_lower, Ma_upper, params_model, params_solver):
+    """
+    Finds the inlet Mach number that makes the flow reach Mach 1 using jaxprop.
+    Fully JAX-traceable (compatible with jit/tracers).
+    """
+
+    def critical_section_position(Mach_in, params_model, params_solver):
+        # update model with candidate Mach
+        pm = replace_param(params_model, "Ma_in", Mach_in)
+        sol = nozzle_homogeneuous_non_equilibrium(pm, params_solver)
+        max_mach = jnp.max(sol.ys["Ma_mix"])
+        x_final = sol.ys["x"][-1]
+        # jax.debug.print("x={x},M_in={M_in}, M_max={M}",x=x_final, M_in=Mach_in, M=max_mach,)
+        return 1.0 - max_mach
+
+    pif_iterations = 0
+
+    fluid1 = params_model.fluid1
+    fluid2 = params_model.fluid2
+
+    state1_in = fluid1.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T01_in)
+    state2_in = fluid2.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T02_in)
+    p_in, rho1_in, rho2_in, h1_in, h2_in = (
+        state1_in["p"],
+        state1_in["rho"],
+        state2_in["rho"],
+        state1_in["h"],
+        state2_in["h"]
+    )
+    q_in = (1)/(1 + params_model.mixture_ratio)
+    G1, a1 = state1_in["G"], state1_in["a"]
+    alpha2 = 1 / (1 + ((1 - q_in) / q_in) * (rho1_in / rho2_in))
+    alpha1 = 1 - alpha2
+
+    G2, a2 = state2_in["G"], state2_in["a"]
+
+    a_in_mix = get_speed_of_sound_mixture(G1, alpha1, a1, rho1_in, G2, alpha2, a2, rho2_in)
+
+    u_in_crit = params_model.Ma_in * a_in_mix
+    q_in = (1)/(1 + params_model.mixture_ratio)
+    alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
+    alpha1_in = 1 - alpha2_in
+
+    Ma_impossible = Ma_upper
+    Ma_possible = Ma_lower
+    Ma_guess = (Ma_lower + Ma_upper)/2
+    u_guess = (Ma_lower * a_in_mix + Ma_upper * a_in_mix) / 2
+
+
+    tol = 1e-3
+    error = Ma_lower - Ma_upper
+
+    while error > tol:
+        pif_iterations += 1  
+        # raw_solution = scipy.integrate.solve_ivp(
+        #     lambda t, y: odefun(y)[0],
+        #     [0, 1],
+        #     y0 = [0.00, alpha1_in, alpha2_in, rho1_in, rho2_in, u_guess_1, u_guess_2, pressure_in_1, h1_in, h2_in],
+        #     # t_eval=np.linspace(0, convergent_length, number_of_points) if number_of_points else None,
+        #     method="RK45",
+        #     rtol=1e-6,
+        #     atol=1e-6,
+        #     events=[ stop_at_zero_det] #, stop_at_length]
+        # )
+        # solution = postprocess_ode_autonomous(raw_solution.t, raw_solution.y, odefun)
+
+        t0, t1 = 1e-9, params_model.length
+        solver = jxp.make_diffrax_solver(params_solver.solver_name)
+        adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+        term = dfx.ODETerm(eval_ode_rhs)
+        ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol) #,dtmin=1e-40) # , dtmin=1e-9) #,dtmax=1e-4)
+
+        # --- event: stop at nozzle exit ---
+        event = dfx.Event(
+            cond_fn=eval_end_of_domain_event,
+            root_finder=optx.Newton(rtol=1e-0, atol=1e-0),
+        )
+
+        y_inlet = [alpha1_in, alpha2_in, rho1_in, rho2_in, u_guess, p_in, h1_in, h2_in]
+
+        # --- first solve (find domain end) ---
+        saveat = dfx.SaveAt(t1 = True, dense = True, fn=eval_ode_full)
+        # saveat = dfx.SaveAt(dense = True, fn=eval_ode_full)
+        sol1 = dfx.diffeqsolve(
+            term,
+            solver,
+            t0=t0,
+            t1=t1,
+            dt0=1e-9,
+            y0=y_inlet,
+            args=params_model,
+            stepsize_controller=ctrl,
+            adjoint=adjoint,
+            saveat=saveat,
+            event=event,
+            max_steps=200_000,
+            # throw=False,
+        )
+        jax.debug.print("last_x={t1}", t1=sol1.ts)
+
+        if sol1.ts[0] < params_model.length:
+            Ma_impossible = Ma_guess
+        else:
+            Ma_possible = Ma_guess
+
+        u_guess = (u_impossible + u_possible) / 2
+        u_guess_2 = (u_guess_1 * rho1_in * A_1_in) / (mixture_ratio * rho2_in * A_2_in)
+        error = abs(u_impossible_1-u_possible_1)/u_possible_1
+        print(u_impossible_1)
+        print(u_possible_1)
+        print(pif_iterations)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    # # Use JAX-safe Bisection
+    # solver = optx.Bisection(rtol=1e-12, atol=1e-12,) # flip=True)
+    # x0_initial = 0.5 * (Ma_lower + Ma_upper)
+    # # x0_initial = u_lower
+
+    # JAX-friendly root find (do not convert to float inside trace)
+    # sol_root = optx.root_find(
+    #     critical_mach_residual,
+    #     solver,
+    #     x0_initial,
+    #     args=params_model,
+    #     throw=True,
+    #     options={"lower": Ma_lower, "upper": Ma_upper},
+    # )
+    # u_in_crit = sol_root.value  
+
+    return u_in_crit
 
 def eval_end_of_domain_event(t, y, args, **kwargs):
-    x = y[0]
-    L = args.length
+        x = t
+        L = args.length
 
-    # Determinant condition
-    out = nozzle_homogeneous_non_equilibrium_autonomous(0.0, y, args)
-    Ma_mix = jnp.min(out.get("Ma_mix"))
-
-    M = 15.0 - Ma_mix
-    # jax.debug.print("x={x}, L-x={leng},M={D}",x=x, leng=L-x, D = out.get("Ma_mix"))
-    # M = 5
-    # jax.debug.print("Not considering mach as event")
-    # Stack all event conditions
-    # L = 0.15
-    conditions = jnp.stack([x / L, 1 - x / L, M])  # D])
-    output = jnp.min(conditions)
-    # jax.debug.print("out={output}",output=output)
-    return output
-
-
-def eval_end_of_domain_event_classic(t, y, args, **kwargs):
-
-    L = args.length
-
-    x = t
-
-    # Determinant condition
-    out = nozzle_homogeneous_non_equilibrium_core(x, y, args)
-    Ma_mix = jnp.min(out.get("Ma_mix"))
-
-    M = 15.0 - Ma_mix
-    # jax.debug.print("x={x}, L-x={leng},M={D}",x=x, leng=L-x, D = out.get("Ma_mix"))
-    # M = 5
-    # jax.debug.print("Not considering mach as event")
-    # Stack all event conditions
-    # L = 0.15
-    conditions = jnp.stack([x / L, 1 - x / L, M])  # D])
-    output = jnp.min(conditions)
-    # jax.debug.print("out={output}",output=output)
-    return output
+        # Determinant condition
+        out = nozzle_homogeneous_non_equilibrium_classic(t, y, args)
+        Ma_mix = out.get("Ma_mix")
+        det_check = out.get("D")
+        # det_last
+        
+        M = -Ma_mix + 0.9999999 # 999999
+        # M = det_check*1e-24 + 1e7
+        # jax.debug.print("x={x} | L-x={leng} | det={D}",x=x, leng=L-x, D = M)
+        # M = 5
+        # jax.debug.print("Not considering mach as event")
+        # Stack all event conditions
+        conditions = jnp.stack([1 - x/L, M]) # D])
+        output = jnp.min(conditions)
+        # jax.debug.print("out={output}",output=output)
+        return jnp.minimum(M, 1-x/L)
