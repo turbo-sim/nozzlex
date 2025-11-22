@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # fluid = jxp.perfect_gas.get_constants(fluid_name, T_ref=300, P_ref=101325)
 
     # -- 1. Find critical state with continuation --
-    N_samples = 20
+    N_samples = 1
 
     params_model = ConvergentDivergentNozzleParams(
         p0_in=91e5,  # Pa 

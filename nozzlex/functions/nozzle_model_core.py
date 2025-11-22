@@ -185,7 +185,7 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
 
     # --- Geometry ---
     # A, dAdx, perimeter, diameter = args.geometry(x, L) # When using symmetric geometry
-    A, dAdx, perimeter, height, D_h = args.geometry(x, L) # When using linear convergent divergent geometry
+    A, dAdx, perimeter, height, D_h = args.geometry(x) # When using linear convergent divergent geometry
     # diameter = 2 * radius
 
     # # --- Wall heat transfer and friction ---
@@ -379,65 +379,65 @@ def get_heat_transfer_coefficient(
     fanning_friction_factor = darcy_friction_factor / 4
     return 0.5 * fanning_friction_factor * velocity * density * heat_capacity
 
-# ------------------------------------------------------------------
-# Describe the geometry of the converging diverging nozzle
-# ------------------------------------------------------------------
-def symmetric_nozzle_geometry(x, L, A_inlet=0.30, A_throat=0.15):
-    """
-    Return A (m^2), dA/dx (m), perimeter (m), diameter (m) for a symmetric parabolic CD nozzle.
-    x: position in m (scalar or array)
-    L: total length in m (scalar)
-    """
-
-    def area_fn(x_):
-        xi = x_ / L
-        return A_inlet - 4.0 * (A_inlet - A_throat) * xi * (1.0 - xi)
-
-    # make it work for both scalar and array x
-    A = area_fn(x)
-
-    # jacfwd works for vector outputs directly
-    dAdx = jax.jacfwd(area_fn)(x)
-
-    radius = jnp.sqrt(A / jnp.pi)          # m
-    diameter = 2.0 * radius                # m
-    perimeter = jnp.pi * diameter          # m
-    D_h = 4.0 * A / perimeter
-
-    return A, dAdx, perimeter, diameter, D_h
-
-# Nakagawa geometry
-def linear_convergent_divergent_nozzle(
-    x,
-    L,
-    # L_convergent=(83.50e-3 - 56.15e-3),
-    L_convergent=26.983e-3,
-    height_in=4.71379e-3,
-    height_throat=0.120361e-3,
-    height_out=0.7015129e-3,
-    width=3.1864e-3,
-):
-    """
-    JAX-safe linear convergent–divergent nozzle (planar geometry).
-    Uses jax.lax.cond (JAX's version of 'if') so only the active branch runs.
-    Returns (A, dAdx, perimeter, height).
-    """
-    L_divergent = L - L_convergent
-
-    def convergent(x_):
-        h = height_in + (height_throat - height_in) * x_ / L_convergent
-        A = 2.0 * h * width
-        dAdx = 2.0 * width * (height_throat - height_in) / L_convergent
-        return A, dAdx, h
-
-    def divergent(x_):
-        h = height_throat + (height_out - height_throat) * (x_ - L_convergent) / L_divergent
-        A = 2.0 * h * width
-        dAdx = 2.0 * width * (height_out - height_throat) / L_divergent
-        return A, dAdx, h
-
-    A, dAdx, h = jax.lax.cond(x <= L_convergent, convergent, divergent, operand=x)
-    perimeter = 2.0 * (width + 2.0 * h)
-    D_h = 4.0 * A / perimeter
-
-    return A, dAdx, perimeter, h, D_h
+# # ------------------------------------------------------------------
+# # Describe the geometry of the converging diverging nozzle
+# # ------------------------------------------------------------------
+# def symmetric_nozzle_geometry(x, L, A_inlet=0.30, A_throat=0.15):
+#     """
+#     Return A (m^2), dA/dx (m), perimeter (m), diameter (m) for a symmetric parabolic CD nozzle.
+#     x: position in m (scalar or array)
+#     L: total length in m (scalar)
+#     """
+#
+#     def area_fn(x_):
+#         xi = x_ / L
+#         return A_inlet - 4.0 * (A_inlet - A_throat) * xi * (1.0 - xi)
+#
+#     # make it work for both scalar and array x
+#     A = area_fn(x)
+#
+#     # jacfwd works for vector outputs directly
+#     dAdx = jax.jacfwd(area_fn)(x)
+#
+#     radius = jnp.sqrt(A / jnp.pi)          # m
+#     diameter = 2.0 * radius                # m
+#     perimeter = jnp.pi * diameter          # m
+#     D_h = 4.0 * A / perimeter
+#
+#     return A, dAdx, perimeter, diameter, D_h
+#
+# # Nakagawa geometry
+# def linear_convergent_divergent_nozzle(
+#     x,
+#     L,
+#     # L_convergent=(83.50e-3 - 56.15e-3),
+#     L_convergent=26.983e-3,
+#     height_in=4.71379e-3,
+#     height_throat=0.120361e-3,
+#     height_out=0.7015129e-3,
+#     width=3.1864e-3,
+# ):
+#     """
+#     JAX-safe linear convergent–divergent nozzle (planar geometry).
+#     Uses jax.lax.cond (JAX's version of 'if') so only the active branch runs.
+#     Returns (A, dAdx, perimeter, height).
+#     """
+#     L_divergent = L - L_convergent
+#
+#     def convergent(x_):
+#         h = height_in + (height_throat - height_in) * x_ / L_convergent
+#         A = 2.0 * h * width
+#         dAdx = 2.0 * width * (height_throat - height_in) / L_convergent
+#         return A, dAdx, h
+#
+#     def divergent(x_):
+#         h = height_throat + (height_out - height_throat) * (x_ - L_convergent) / L_divergent
+#         A = 2.0 * h * width
+#         dAdx = 2.0 * width * (height_out - height_throat) / L_divergent
+#         return A, dAdx, h
+#
+#     A, dAdx, h = jax.lax.cond(x <= L_convergent, convergent, divergent, operand=x)
+#     perimeter = 2.0 * (width + 2.0 * h)
+#     D_h = 4.0 * A / perimeter
+#
+#     return A, dAdx, perimeter, h, D_h
