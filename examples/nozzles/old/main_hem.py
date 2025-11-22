@@ -17,7 +17,7 @@ with open("settings.yaml", 'r') as file:
     case_data = yaml.safe_load(file)
 
 if case_data["fluid"]["look_up_table"] is False:
-    from nozzlex.functions_old import functions_hem_cp as function
+    from nozzlex.functions_old import functions_hrm as function
 else:
     from nozzlex.functions_old import functions_hem_lut as function
 

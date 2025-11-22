@@ -82,9 +82,11 @@ def f64(value):
 
 class NozzleParams(eqx.Module):
     fluid: Any = eqx.field(static=False)
+    geometry: Callable = eqx.field(static=True)
     p0_in: jnp.ndarray = f64(1.0e5)       # Pa
     d0_in: jnp.ndarray = f64(1.20)        # kg/m³
-    h0_in: jnp.ndarray = f64(300e3)
+    D_in: jnp.ndarray = f64(0.050)        # m
+    length: jnp.ndarray = f64(5.00)       # m
     roughness: jnp.ndarray = f64(1e-6)    # m
     T_wall: jnp.ndarray = f64(300.0)      # K
     Ma_in: jnp.ndarray = f64(0.1)
@@ -93,74 +95,6 @@ class NozzleParams(eqx.Module):
     Ma_target: jnp.ndarray = f64(1.0)
     heat_transfer: jnp.ndarray = f64(0.0)
     wall_friction: jnp.ndarray = f64(0.0)
-    p_termination: jnp.ndarray = f64(0.0)
-
-class ConvergentDivergentNozzleParams(NozzleParams):
-    length: jnp.ndarray = f64(5.00)  # m
-    L_convergent: jnp.ndarray = f64(27.35e-3)
-    height_in: jnp.ndarray = f64(5e-3)
-    height_throat: jnp.ndarray = f64(0.12e-3)
-    height_out: jnp.ndarray = f64(0.72e-3)
-    width: jnp.ndarray = f64(3e-3)
-
-    # Nakagawa geometry
-    def geometry(
-            self, x
-    ):
-        """
-        JAX-safe linear convergent–divergent nozzle (planar geometry).
-        Uses jax.lax.cond (JAX's version of 'if') so only the active branch runs.
-        Returns (A, dAdx, perimeter, height).
-        """
-        L_divergent = self.length - self.L_convergent
-
-        def convergent(x_):
-            h = self.height_in + (self.height_throat - self.height_in) * x_ / self.L_convergent
-            A = 2.0 * h * self.width
-            dAdx = 2.0 * self.width * (self.height_throat - self.height_in) / self.L_convergent
-            return A, dAdx, h
-
-        def divergent(x_):
-            h = self.height_throat + (self.height_out - self.height_throat) * (x_ - self.L_convergent) / L_divergent
-            A = 2.0 * h * self.width
-            dAdx = 2.0 * self.width * (self.height_out - self.height_throat) / L_divergent
-            return A, dAdx, h
-
-        A, dAdx, h = jax.lax.cond(x <= self.L_convergent, convergent, divergent, operand=x)
-        perimeter = 2.0 * (self.width + 2.0 * h)
-        D_h = 4.0 * A / perimeter
-
-        return A, dAdx, perimeter, h, D_h
-
-class SymmetricNozzleGeometry(NozzleParams):
-    D_in : jnp.ndarray = f64(0.05)      # m
-    length: jnp.ndarray = f64(5.00)  # m
-    A_inlet: jnp.ndarray=f64(0.30)
-    A_throat: jnp.ndarray=f64(0.15)
-
-    def geometry(self, x):
-        """
-        Return A (m^2), dA/dx (m), perimeter (m), diameter (m) for a symmetric parabolic CD nozzle.
-        x: position in m (scalar or array)
-        L: total length in m (scalar)
-        """
-
-        def area_fn(x_):
-            xi = x_ / self.length
-            return self.A_inlet - 4.0 * (self.A_inlet - self.A_throat) * xi * (1.0 - xi)
-
-        # make it work for both scalar and array x
-        A = area_fn(x)
-
-        # jacfwd works for vector outputs directly
-        dAdx = jax.jacfwd(area_fn)(x)
-
-        radius = jnp.sqrt(A / jnp.pi)  # m
-        diameter = 2.0 * radius  # m
-        perimeter = jnp.pi * diameter  # m
-        D_h = 4.0 * A / perimeter
-
-        return A, dAdx, perimeter, diameter, D_h
 
 
 class BVPSettings(eqx.Module):
@@ -192,9 +126,6 @@ class ResidualParams(eqx.Module):
 
 def replace_param(obj, field, value):
     """Return a copy of obj with a single field replaced."""
-    if field == "geometry_params":
-        return eqx.tree_at(lambda o: getattr(o, field), obj, replace=value)
-
     return eqx.tree_at(lambda o: getattr(o, field), obj, replace=jnp.asarray(value))
 
 
@@ -619,163 +550,73 @@ def chebyshev_lobatto_interpolate_and_derivative(x_nodes, y_nodes, x_eval):
     else:
         return jax.vmap(_scalar_interp_and_deriv)(x_eval)
 
-def compute_static_state(p0, h0, Ma, fluid):
-    st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
-    s0 = st0["s"]
-
-    def residual_reparam(y, _):
-        lnp, hr = y
-        p = jnp.exp(lnp)
-        h = hr * h0
-        st = fluid.get_state(jxp.HmassP_INPUTS, h, p)
-        a = st["a"]; s = st["s"]
-        f1 = 1.0 - (h + 0.5*(a*Ma)**2)/h0
-        f2 = s/s0 - 1.0
-        return jnp.array([f1, f2])
-
-    p_vals = jnp.linspace(0.8*p0, 1.0*p0, 6)
-    h_vals = jnp.linspace(0.8*h0, 1.0*h0, 6)
-    p_grid, h_grid = jnp.meshgrid(p_vals, h_vals)
-
-    def eval_residual_at(p, h):
-        y_test = jnp.array([jnp.log(p), h / h0])
-        r = residual_reparam(y_test, None)
-        return jnp.linalg.norm(r)
-
-    residual_grid = jax.vmap(
-        jax.vmap(eval_residual_at)
-    )(p_grid, h_grid)
-
-    idx = jnp.argmin(residual_grid)
-    i, j = jnp.unravel_index(idx, residual_grid.shape)
-
-    p_best = p_grid[i, j]
-    h_best = h_grid[i, j]
-
-    y0 = jnp.array([
-        jnp.log(p_best),
-        h_best / h0
-    ])
-
-    solver = optx.GaussNewton(rtol=1e-6, atol=1e-6)
-    sol = optx.root_find(residual_reparam, solver, y0=y0, max_steps=2000)
-
-    # Extract final state
-    lnp, hr = sol.value
-    p, h = jnp.exp(lnp), hr*h0
-
-    return fluid.get_state(jxp.HmassP_INPUTS, h, p)
-
-# def compute_static_state(p0, h0, Ma, fluid):
-#     # --- Reference stagnation state ---
-#     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
-#     s0 = st0["s"]
-
-#     # --- Define residual system: f(p, h) = [f1, f2] ---
-#     def residual(x, _):
-#         p, h = x
-#         st = fluid.get_state(jxp.HmassP_INPUTS, h, p)
-#         a, s = st["a"], st["s"]
-#         f1 = 1.0 - (h + 0.5 * (a * Ma) ** 2) / h0   # energy balance
-#         # f1 = h0 - (h + 0.5 * (a * Ma) ** 2)
-#         f2 = s/s0 - 1.0                             # isentropic condition
-#         # f2 = s - s0
-#         return jnp.array([f1, f2])
-
-#     # --- Initial guess ---
-#     # start slightly below stagnation pressure, same enthalpy
-#     x0 = jnp.array([p0*0.99, h0*0.99])
-
-#     # --- Solve ---
-#     solver = optx.GaussNewton(rtol=1e-3, atol=1e-3)
-#     sol = optx.root_find(residual, solver, y0=x0, max_steps=2000)
-
-#     # --- Evaluate final state ---
-#     p, h = sol.value
-#     state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
-#     return state
 
 
 # ---------- Compute static state from stagnation and Mach number ----------
-# def compute_static_state(p0, h0, Ma, fluid):
-#     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
-#     s0 = st0["s"]
+def compute_static_state(p0, d0, Ma, fluid):
+    st0 = fluid.get_state(jxp.DmassP_INPUTS, d0, p0)
+    s0, h0 = st0["s"], st0["h"]
 
-#     # Scalar residual for Bisection
-#     def residual(p, _):
-#         st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
-#         a, h = st["a"], st["h"]
-#         return h0 - h - 0.5 * (a * Ma)**2
+    # Scalar residual for Bisection
+    def residual(p, _):
+        st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
+        a, h = st["a"], st["h"]
+        return h0 - h - 0.5 * (a * Ma)**2
 
-#     solver = optx.Newton(rtol=1e-3, atol=1e-3)
-#     lower, upper = 0.2 * p0, p0
-#     # sol = optx.root_find(residual, solver, y0=p0, options={"lower": lower, "upper": upper})
-#     sol = optx.root_find(residual, solver, y0=0.95* p0)
-#     state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
-#     return state
-
-# def compute_static_state(p0, h0, Ma, fluid):
-#     st0 = fluid.get_state(jxp.HmassP_INPUTS, h0, p0)
-#     s0 = st0["s"]
-
-#     # Residual: total - static enthalpy = ½ (a * Ma)^2
-#     def residual(h, _):
-#         st = fluid.get_state(jxp.HmassSmass_INPUTS, h, s0)
-#         a = st["a"]
-#         return h0 - h - 0.5 * (a * Ma)**2
-
-#     # Solve for static enthalpy
-#     solver = optx.GaussNewton(rtol=1e-3, atol=1e-3)
-#     # You can estimate lower/upper bounds around h0
-#     lower, upper = 0.4 * h0, h0
-#     sol = optx.root_find(residual, solver, y0=h0, options={"lower": lower, "upper": upper})
-
-#     # Get final state
-#     state = fluid.get_state(jxp.HmassSmass_INPUTS, sol.value, s0)
-#     return state
+    solver = optx.Bisection(rtol=1e-3, atol=1e-3)
+    lower, upper = 0.4 * p0, p0
+    sol = optx.root_find(residual, solver, y0=0.99 * p0, options={"lower": lower, "upper": upper})
+    state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
+    return state
 
 @eqx.filter_jit
-def nozzle_single_phase_max_mach(
-    params_model,
-    params_solver,
-):
+def nozzle_single_phase(params_model, params_solver):
     """
     1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
-    State vector: y = [v, rho, p].
+    State vector: y = [x, p, v, h].
     """
-    # Compute inlet conditions iteratively
+    # --- inlet state ---
     state_in = compute_static_state(
         params_model.p0_in,
-        params_model.h0_in,
+        params_model.d0_in,
         params_model.Ma_in,
         params_model.fluid,
     )
-    p_in, rho_in, a_in, h_in = state_in["p"], state_in["rho"], state_in["a"], state_in["h"]
+    p_in, rho_in, a_in, h_in = (
+        state_in["p"],
+        state_in["rho"],
+        state_in["a"],
+        state_in["h"],
+    )
     v_in = params_model.Ma_in * a_in
-    x_in = 1e-9  # Start slightly after the nozzle inlet
+    x_in = 1e-9  # start slightly after inlet
     y0 = jnp.array([x_in, p_in, v_in, h_in])
 
-    # Create and configure the solver
-    t0 = 0.0  # Start at tau=0 (arbitrary)
-    t1 = 1e9  # Large value that will not be reached
+    # --- solver setup ---
+    t0, t1 = 0.0, 1e9
     solver = jxp.make_diffrax_solver(params_solver.solver_name)
     adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
     term = dfx.ODETerm(eval_ode_rhs)
     ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
+
+    # --- event: stop at nozzle exit ---
+    def eval_end_of_domain_event(t, y, args, **kwargs):
+        x = y[0]
+        L = args.length
+        return jnp.minimum(x, L - x)
+
     event = dfx.Event(
         cond_fn=eval_end_of_domain_event,
-        root_finder=optx.Bisection(rtol=1e-9, atol=1e-9),
+        root_finder=optx.Bisection(rtol=1e-10, atol=1e-10),
     )
 
-    saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)
-    # Solve the ODE system without saving solution
+    # --- first solve (find domain end) ---
     sol = dfx.diffeqsolve(
         term,
         solver,
         t0=t0,
         t1=t1,
-        saveat=saveat,
-        dt0=1e-12,
+        dt0=1e-9,
         y0=y0,
         args=params_model,
         stepsize_controller=ctrl,
@@ -784,79 +625,35 @@ def nozzle_single_phase_max_mach(
         max_steps=20_000,
     )
 
-    # Optimization problem to find the max(Mach)
-    x0 = sol.ts[0]/2
-   
-    solver = optx.BFGS(rtol=1e-3, atol=1e-3)
-   
-    # Run optimization
-    res = optx.minimise(
-                        lambda t, *args: -nozzle_single_phase_autonomous_ph(0.0, sol.evaluate(t), params_model)["Ma"],
-                        solver,
-                        y0=x0,
-                        max_steps=1000,
-                    )
- 
- 
-    t_max = res.value
-    yy_max = sol.evaluate(t_max)
-    Ma_max = nozzle_single_phase_autonomous_ph(0.0, yy_max, params_model)["Ma"]
-    # jax.debug.print("Max mach {M}", M=Ma_max)
+    # --- second solve (save fields) ---
+    ts = jnp.linspace(t0, sol.ts[-1], params_solver.number_of_points)
+    saveat = dfx.SaveAt(ts=ts, t1=True, fn=eval_ode_full)
+    sol_dense = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=sol.ts[-1],
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        saveat=saveat,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        max_steps=20_000,
+    )
 
-    return Ma_max
-
-
-def eval_end_of_domain_event(t, y, args, **kwargs):
-    L = args.length
-
-    # Unpack variables
-    x, p, v, h = y
-
-    # jax.debug.print("x = {x:.3e}, p = {p:.6e}", x=x, p=p)
-
-    fluid = args.fluid
-
-    # Compute determinant D
-    state = fluid.get_state(jxp.HmassP_INPUTS, h, p)
-    a = state["a"]
-    d = state["rho"]
-    G = state["gruneisen"]
-
-    dddp = (1 + G) / a**2
-    dddh = - (d * G) / a**2
-
-    A_mat = jnp.array([
-        [v * dddp, d, v * dddh],
-        [1.0, d * v, 0.0],
-        [v, 0.0, -d * v],
-    ])
-
-    D = jnp.linalg.det(A_mat)
-
-    # Two event conditions:
-    # 1. Domain end: L - x
-    # 2. Determinant-negative condition: 0.2 - x (active only if D < 0)
-
-    cond_1 = L - x
-    # cond_2 = jnp.where(D < 0, x - 25e-3, 1e9)
-    cond_2 = 1.2 - v/a
-    # cond_2 = x
-
-    # Trigger when either becomes zero
-    val = jnp.minimum(cond_1, cond_2)
-
-    return val 
+    return sol_dense
 
 
 # -----------------------------------------------------------------------------
 # Helper ODE evaluation functions
 # -----------------------------------------------------------------------------
-def eval_ode_full(t, y, args):
-    return nozzle_single_phase_autonomous_ph(t, y, args)
+# def eval_ode_full(t, y, args):
+#     return nozzle_single_phase_autonomous_ph(t, y, args)
 
 
-def eval_ode_rhs(t, y, args):
-    return nozzle_single_phase_autonomous_ph(t, y, args)["rhs_autonomous"]
+# def eval_ode_rhs(t, y, args):
+#     return nozzle_single_phase_autonomous_ph(t, y, args)["rhs_autonomous"]
 
 
 # -----------------------------------------------------------------------------
@@ -870,18 +667,15 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
 
     # Residual using only jax operations and jxp for property evaluation
     def critical_mach_residual(Mach_in, params_model):
-
+        # update model with candidate Mach
         pm = replace_param(params_model, "Ma_in", Mach_in)
-        max_mach = nozzle_single_phase_max_mach(pm, params_solver)
-        # jax.debug.print("1-mach = {}", 1-max_mach)
-        # min_det = jnp.min(sol.ys["D"])
-        # jax.debug.print("min(D) = {}", min_det)
-        # return min_det
-        return 0.99 - max_mach
+        sol = nozzle_single_phase(pm, params_solver)
+        max_mach = jnp.max(sol.ys["Ma"])
+        return 1.0 - max_mach
 
     # Use JAX-safe Bisection
     solver = optx.Bisection(rtol=1e-3, atol=1e-3)
-    x0_initial = Ma_lower
+    x0_initial = 0.5 * (Ma_lower + Ma_upper)
 
     # JAX-friendly root find (do not convert to float inside trace)
     sol_root = optx.root_find(
