@@ -85,6 +85,11 @@ class NozzleParams(eqx.Module):
     geometry: Callable = eqx.field(static=True)
     p0_in: jnp.ndarray = f64(1.0e5)       # Pa
     d0_in: jnp.ndarray = f64(1.20)        # kg/m³
+    L_convergent : jnp.ndarray = f64(0.02735)
+    height_in : jnp.ndarray = f64(0.005)
+    height_throat : jnp.ndarray = f64(0.00012)
+    height_out : jnp.ndarray = f64(0.00027)
+    width: jnp.ndarray = f64(0.003)
     h0_in: jnp.ndarray = f64(300e3)
     D_in: jnp.ndarray = f64(0.050)        # m
     length: jnp.ndarray = f64(5.00)       # m
@@ -97,7 +102,7 @@ class NozzleParams(eqx.Module):
     heat_transfer: jnp.ndarray = f64(0.0)
     wall_friction: jnp.ndarray = f64(0.0)
     p_termination: jnp.ndarray = f64(0.0)
-
+    two_phase_friction: str = eqx.field(default="none", static=True)
 
 class BVPSettings(eqx.Module):
     num_points: int = eqx.field(static=True)
@@ -720,7 +725,7 @@ def nozzle_single_phase_max_mach(
     # Optimization problem to find the max(Mach)
     x0 = sol.ts[0]/2
    
-    solver = optx.BFGS(rtol=1e-3, atol=1e-3)
+    solver = optx.BFGS(rtol=1e-6, atol=1e-6)
    
     # Run optimization
     res = optx.minimise(
@@ -810,7 +815,7 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
         # min_det = jnp.min(sol.ys["D"])
         # jax.debug.print("min(D) = {}", min_det)
         # return min_det
-        return 0.99 - max_mach
+        return 1. - max_mach
 
     # Use JAX-safe Bisection
     solver = optx.Bisection(rtol=1e-3, atol=1e-3)

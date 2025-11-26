@@ -175,6 +175,12 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
     mu = state["mu"]
     G = state["gruneisen"]
 
+    try:
+        Q = state["quality_mass"]
+        two_phase = jnp.logical_and(Q > 0.0, Q < 1.0)    
+    except AttributeError:
+        two_phase = False
+
     # Stagnation state
     h0 = state["h"] + 0.5 * v**2
     # state0 = fluid.get_state(jxp.HmassSmass_INPUTS, h0, state["s"])
@@ -188,18 +194,17 @@ def nozzle_single_phase_autonomous_ph(tau, Y, args):
     A, dAdx, perimeter, height, D_h = args.geometry(x, L) # When using linear convergent divergent geometry
     # diameter = 2 * radius
 
-    # # --- Wall heat transfer and friction ---
-    # Re = v * d * diameter / jnp.maximum(mu, 1e-12)
-    # f_D = get_friction_factor_haaland(Re, eps_wall, diameter)
-    # tau_w = get_wall_viscous_stress(f_D, d, v)
-    # htc = 10000*get_heat_transfer_coefficient(v, d, cp, f_D)
-    # htc = jnp.clip(htc, 0.0, 1e6)   # pick bound based on your scaling
-    # q_w = htc * (T_ext - T)
 
     # --- Wall heat transfer and friction ---
     Re = v * d * D_h / jnp.maximum(mu, 1e-12)
     f_D = get_friction_factor_haaland(Re, eps_wall, D_h)
     tau_w = get_wall_viscous_stress(f_D, d, v)
+    # tau_w = jax.lax.cond(
+    #     two_phase,
+    #     lambda _: get_wall_viscous_stress_two_phase(args, p, d, Q, f_D, args.two_phase_friction, D_h, v),
+    #     lambda _: get_wall_viscous_stress(f_D, d, v),
+    #     operand=None
+    # )
     htc = 10000*get_heat_transfer_coefficient(v, d, cp, f_D)
     htc = jnp.clip(htc, 0.0, 1e6)   # pick bound based on your scaling
     q_w = htc * (T_ext - T)
@@ -326,8 +331,59 @@ def get_friction_factor_haaland(Reynolds, roughness, diameter):
     Re_safe = jnp.maximum(Reynolds, 1.0)
     term = 6.9 / Re_safe + (roughness / diameter / 3.7) ** 1.11
     f = (-1.8 * jnp.log10(term)) ** -2
+    ratio = roughness / diameter
+    # jax.debug.print("f_D = {f_D}, Re = {Re}, term={term}, roughness/D_h = {ratio}", f_D=f, Re=Reynolds, term=term, ratio = ratio)
+
     return f
 
+def viscosity_MacAdams(mu_L, mu_v, x):
+    mu = (x/mu_v + (1-x)/mu_L)**(-1)
+    return mu
+
+def f_HEM_purdue(Re):
+    if Re < 2000:
+        f = 16 / Re
+    elif 200 <= Re < 20000:
+        f = 0.079 * (Re ** -0.25)
+    else:
+        f = 0.046 * (Re ** -0.2)
+        
+    return f
+
+
+# def LM_gronnerud(rho_l, rho_v, mu_l, mu_v, x, G_l, d, g=9.81):
+#     """
+#     Calculate the Lockhart-Martinelli parameter (Phi_LM) based on the given parameters.
+   
+#     Parameters:
+#     rho_l (float): Liquid density (kg/m^3)
+#     rho_v (float): Vapor density (kg/m^3)
+#     mu_l (float): Liquid viscosity (Pa·s or kg/m·s)
+#     mu_v (float): Vapor viscosity (Pa·s or kg/m·s)
+#     x (float): Void fraction (dimensionless)
+#     g_l (float): Liquid mass flux (kg/m^2/s)
+#     g (float): Gravitational acceleration (m/s^2)
+#     d (float): Pipe diameter (m)
+   
+#     Returns:
+#     float: Phi_LM (dimensionless)
+#     """
+#     # Step 1: Calculate Fr_L
+#     Fr_l = G_l**2 / (g * d * rho_l**2)
+   
+#     # Step 2: Determine f_FR based on Fr_L
+#     if Fr_l >= 1:
+#         f_fr = 1
+#     else:
+#         f_fr = Fr_l**0.3 + 0.0055 * (math.log(1 / Fr_l))**2
+   
+#     # Step 3: Calculate (dp/dz)_Fr
+#     dp_dz_fr = f_fr * (x + 4 * (x**1.8 - x**10 * f_fr**0.5))
+   
+#     # Step 4: Calculate Phi_LM^2
+#     phi_lm_squared = 1 + dp_dz_fr * (((rho_l / rho_v) / (mu_l / mu_v)**0.25) - 1)
+   
+#     return phi_lm_squared  # Return Phi_LM^2
 
 def get_wall_viscous_stress(darcy_friction_factor, density, velocity):
     """Wall shear stress from Darcy-Weisbach friction factor.
@@ -348,6 +404,60 @@ def get_wall_viscous_stress(darcy_friction_factor, density, velocity):
     """
     return 0.125 * darcy_friction_factor * density * velocity**2
 
+def get_wall_viscous_stress_two_phase(args, p, rho, Q, f_D, correlation, Dh, v):
+    """
+    Compute wall viscous stress for two-phase flow using different correlations.
+    
+    correlations: "Beattie", "Richardson"
+    """
+    fluid = args.fluid
+    state_L = fluid.get_state(jxp.PQ_INPUTS, p, 0.0)
+    state_V = fluid.get_state(jxp.PQ_INPUTS, p, 1.0)
+
+    rho_L = state_L.rho
+    rho_V = state_V.rho
+    mu_L = state_L.mu
+    mu_V = state_V.mu
+
+    roughness = args.roughness
+
+    # Strings are static → normal Python if/elif works
+    if correlation == "Beattie":
+
+        """
+        Calculate the mixture viscosity with Beattie formula
+            x: vapour quality
+            y: void fraction
+        """
+
+        y = rho_L * Q / (rho_L * Q + rho_V * (1 - Q))
+        mu = mu_L * (1 - y) * (1 + 2.5 * y) + mu_V * y 
+        Reynolds = v * rho * Dh / jnp.maximum(mu, 1e-12)
+
+        Re_safe = jnp.maximum(Reynolds, 1.0)
+        term = 6.9 / Re_safe + (roughness / Dh / 3.7) ** 1.11
+        f = (-1.8 * jnp.log10(term)) ** -2
+
+        tau_w = 0.125 * f * rho * v**2
+
+
+    elif correlation == "Richardson": 
+
+        """
+        Calculate the mixture viscosity with Richardson formula
+            x: vapour quality
+            y: void fraction
+        """
+        gamma = rho_L * Q / (rho_L * Q + rho_V * (1 - Q))
+        phi_lm_squared = (1-gamma)**(-1.75)
+
+        tau_w = f_D * Dh * v**2 * 0.3
+
+    else:
+        # Default for single phase
+        tau_w = 0.125 * f_D * rho * v**2
+
+    return tau_w
 
 def get_heat_transfer_coefficient(
     velocity, density, heat_capacity, darcy_friction_factor
@@ -411,11 +521,11 @@ def linear_convergent_divergent_nozzle(
     x,
     L,
     # L_convergent=(83.50e-3 - 56.15e-3),
-    L_convergent=26.983e-3,
-    height_in=4.71379e-3,
-    height_throat=0.120361e-3,
-    height_out=0.7015129e-3,
-    width=3.1864e-3,
+    L_convergent=0.02735,
+    height_in=0.005,
+    height_throat=0.00012,
+    height_out=0.00027,
+    width=0.003,
 ):
     """
     JAX-safe linear convergent–divergent nozzle (planar geometry).
