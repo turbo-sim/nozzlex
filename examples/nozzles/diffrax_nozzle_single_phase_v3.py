@@ -269,16 +269,16 @@ if __name__ == "__main__":
     params_ivp = IVPSettings(
         solver_name="Dopri5",
         adjoint_name="DirectAdjoint",
-        number_of_points=400,
-        rtol=1e-8,
-        atol=1e-8,
+        number_of_points=200,
+        rtol=1e-6,
+        atol=1e-6,
     )
 
     L_nakagawa = 0.0835
     params_model = replace_param(params_model, "length", L_nakagawa)
    
     # Extract columns as arrays (optional but convenient)
-    df = pd.read_csv("temp_2.csv")
+    df = pd.read_csv("sol9_solutions_case_d1.csv")
 
     L_convergent = df["L_convergent"].values
     Height_in = df["height_in"].values
@@ -297,10 +297,10 @@ if __name__ == "__main__":
     # input_array = jnp.linspace(0, 2e-6, 11)
     # input_array_p = jnp.linspace(80e5, 95e5, 5) 
     # input_array_h = jnp.linspace(290e3, 300e3, 5)
-    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, (150-54)))  # Generate colors
+    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, (1450-1400)))  # Generate colors
     solution_list = []
     # failed: 53
-    for i in range(150, 350):
+    for i in range(1400, 1450):
         t0 = time.perf_counter()
         params_model = replace_param(params_model, "L_convergent", L_convergent[i])
         params_model = replace_param(params_model, "height_in", Height_in[i])
