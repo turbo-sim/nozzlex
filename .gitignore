@@ -75,11 +75,4 @@ venv/
 **/fluid_tables/
 **/verification_figures/
 
-
-**/functions_dem_smd.py
-**/functions_dem_nakagawa.py
-**/functions_dem_nakagawa_new.py
-./nozzlex/delayed_equilibrium/
-
-**/delayed_equilibrium/
 nozzlex/delayed_equilibrium/
