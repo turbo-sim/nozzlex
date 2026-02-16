@@ -6,7 +6,8 @@ import time
 import os
 import shutil
 import barotropy as bpy # Only used to plot the Ts and Ph diagrams, not for evaluating properties during computation
-
+import pandas as pd
+import os
 
 # ====================================================
 # === 1. IMPORT SETTINGS                           ===
@@ -44,7 +45,7 @@ critical_flow = case_data["boundary_conditions"]["critical_flow"]
 state_in = fluid.get_state(bpy.PT_INPUTS, p_in, T_in)
 
 start_time = time.time()
-solution = function.pipeline_steady_state_1D_autonomous(
+_, _, solution = function.pipeline_steady_state_1D_autonomous(
     fluid_name=fluid_name, properties_in=state_in, temperature_in=T_in, pressure_in=p_in, convergent_length=convergent_length,
     divergent_length=divergent_length, roughness=roughness, radius_in=radius_in, radius_throat=radius_throat, radius_out=radius_out,
     nozzle_type=nozzle_type, width=width, critical_flow=critical_flow, include_friction=True, include_heat_transfer=False)
@@ -89,7 +90,7 @@ ax1 = axs[0, 0]
 ax1.set_xlabel("Axis position [-]", fontsize=14)
 ax1.set_ylabel("Normalized static pressure [-]", fontsize=14)
 ax1.plot(
-    solution["distance"],
+    solution["z"],
     solution["pressure"],
     linewidth=1.00,
     marker="o",
@@ -105,7 +106,7 @@ ax2 = axs[0, 1]
 ax2.set_xlabel("Axis position [-]", fontsize=14)
 ax2.set_ylabel("Velocity [m/s]", fontsize=14)
 ax2.plot(
-    solution["distance"],
+    solution["z"],
     solution["velocity"],
     linewidth=1.00,
     marker="o",
@@ -121,8 +122,8 @@ ax3 = axs[1, 0]
 ax3.set_xlabel("Axis position [-]", fontsize=14)
 ax3.set_ylabel("Determinant [-]", fontsize=14)
 ax3.plot(
-    solution["distance"],
-    solution["determinant_D"],  # Replace with Mach if available
+    solution["z"],
+    solution["diameter"],  # Replace with Mach if available
     linewidth=1.00,
     marker="o",
     markersize=3.5,
@@ -137,7 +138,7 @@ ax4 = axs[1, 1]
 ax4.set_xlabel("Axis position [-]", fontsize=14)
 ax4.set_ylabel("Gamma [-]", fontsize=14)
 ax4.plot(
-    solution["distance"],
+    solution["z"],
     solution["gamma"],  # Replace with density if available
     linewidth=1.00,
     marker="o",
@@ -147,6 +148,22 @@ ax4.plot(
     label="Critical flow",
 )
 ax4.legend(loc="best")
+
+# 1. Convert the dictionary to a pandas DataFrame
+output_folder = "output"
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+
+# 2. Construct the filename using p_in and T_in
+# We use f-strings to plug the variables directly into the string
+filename = f"p{p_in/1e5}_T{T_in}_SMD.csv"
+filepath = os.path.join(output_folder, filename)
+
+# 3. Save the solution dictionary to CSV via Pandas
+df = pd.DataFrame(solution)
+df.to_csv(filepath, index=False)
+
+print(f"--- Data saved to: {filepath} ---")
 
 fig.tight_layout(pad=1.0)
 plt.show()

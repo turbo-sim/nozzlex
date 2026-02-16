@@ -93,62 +93,48 @@ def transonic_nozzle_single_phase(
     # --- 3. Linearization close to critical point ---
     x_crit = sol1.ys["x"][-1]
     y_crit = jnp.array([sol1.ys["p"][-1], sol1.ys["v"][-1], sol1.ys["h"][-1]])
-    f_star, Jy, Jt = _linearize_rhs_at(x_crit, y_crit, params_model)
 
-    # def ode_full_transonic(t, y, args):
-    #     base = nozzle_single_phase_core(t, y, args)
-    #     M = base["Ma"]
-    #     rhs_true = base["rhs"]
-    #     rhs_lin = f_star + Jy @ (y - y_crit) + Jt * (t - x_crit)
+    # Regularized linearization (linearize g = (1-M^2)*rhs )
+    g_star, Jg_y, Jg_t = _linearize_regularized_rhs(x_crit, y_crit, params_model)
 
-    #     # Start blending slightly after sonic conditions, finish at Ma_high
-    #     Ma_start = 1.000005
-    #     Ma_end = args.Ma_high
-    #     s = (M - Ma_start) / (Ma_end - Ma_start)
-    #     w = _smoothstep(jnp.clip(s, 0.0, 1.0))  # smoothly 0→1 in that narrow range
-    #     rhs_blend = (1.0 - w) * rhs_lin + w * rhs_true
-    #     in_window = (M >= args.Ma_low) & (M <= args.Ma_high)
-    #     rhs_blend = jnp.where(in_window, rhs_blend, rhs_true)
+    eps_reg = 1e-12  # small regularization to avoid exact division by 0
 
-    #     return {**base, "rhs": rhs_true, "rhs_blend": rhs_blend}
-    
     def ode_full_transonic(t, y, args):
         # jax.debug.print("x={x} | y={y}", x=t, y=y)
         base = nozzle_single_phase_core(t, y, args)
         Ma = base["Ma"]
         rhs_true = base["rhs"]
-        rhs_lin = f_star + Jy @ (y - y_crit) + Jt * (t - x_crit)
- 
+
+        # Reconstruct linearized rhs from linearization of g = (1-M^2)*rhs
+        g_lin = g_star + (Jg_y @ (y - y_crit)) + (Jg_t * (t - x_crit))
+        denom = (1.0 - Ma ** 2) + eps_reg
+        rhs_lin = g_lin / denom
+
         # Start blending slightly after sonic conditions, finish at Ma_high
         Ma_start = 1.00001
         Ma_end = args.Ma_high
         s = (Ma - Ma_start) / (Ma_end - Ma_start)
         w = _smoothstep(jnp.clip(s, 0.0, 1.0))  # smoothly 0→1 in that narrow range
         rhs_blend = (1.0 - w) * rhs_lin + w * rhs_true
-        # in_window = (Ma >= args.Ma_low) & (Ma <= args.Ma_high)
-        # blend_window = (Ma >= Ma_start) & (Ma <= args.Ma_high)
+
         in_window = (Ma >= args.Ma_low) & (Ma <= args.Ma_high)
         blend_window = (Ma >= Ma_start) & (Ma <= args.Ma_high)
-        # jax.debug.print("x={x} | Ma={M} | w={w} | in_wind={iw} | bl_wind={bw}", x=x, M=Ma, w=w, iw=in_window, bw=blend_window)
-        # jax.debug.print("Ma={M} | w={w} | in_wind={iw}", M=Ma, w=w, iw=in_window)
+
+        # On the blend interval use blended model, slightly before start use linear, outside window use true rhs.
         rhs_blend = jnp.where(in_window, jnp.where(blend_window, rhs_blend, rhs_lin), rhs_true)
- 
+
         return {**base, "rhs": rhs_true, "rhs_blend": rhs_blend}
- 
- 
 
     def ode_rhs_transonic(t, y, args):
         return ode_full_transonic(t, y, args)["rhs_blend"]
 
     # --- 4. Second pass ---
-
     event_low_pressure = dfx.Event(
         cond_fn=_low_pressure_event_cond,
         root_finder=optx.Bisection(rtol=1e-6, atol=1e-6),
     )
 
-    # TODO, perhaps it is more robust to do 1 pass for each segment instead of attempting a single pass?
-    ts2 = jnp.linspace(1e-9, params_model.length, params_ivp.number_of_points)
+    ts2 = jnp.linspace(1e-9, params_model.L_convergent, params_ivp.number_of_points)
     term2 = dfx.ODETerm(ode_rhs_transonic)
     save2 = dfx.SaveAt(ts=ts2, t1=True, fn=ode_full_transonic)
     sol2 = dfx.diffeqsolve(
@@ -173,32 +159,41 @@ def _mach_event_cond(t, y, args, **kwargs):
     """Event function: zero when M^2 - Ma_low^2 = 0."""
     p, v, h = y
     a = args.fluid.get_state(jxp.HmassP_INPUTS, h, p)["a"]
-    Ma_sqr = (v / a)**2
-    return Ma_sqr - args.Ma_low**2
+    Ma_sqr = (v / a) ** 2
+    return Ma_sqr - args.Ma_low ** 2
+
 
 def _low_pressure_event_cond(t, y, args, **kwargs):
     """Event function: avoid too long pressures"""
     p, v, h = y
     cond = p - args.p_termination
     # jax.debug.print("t = {t:.3e}, p = {p:.6e}, cond = {cond:.6e}", t=t, p=p, cond=cond)
-
     return cond
 
-def _linearize_rhs_at(x_star, y_star, model):
-    """Return Taylor expansion coefficients of RHS around (x_star, y_star)."""
-    rhs_fn = lambda xx, yy: nozzle_single_phase_core(xx, yy, model)["rhs"]
-    f_star = rhs_fn(x_star, y_star)  # RHS at expansion point
-    Jy = jax.jacrev(lambda yy: rhs_fn(x_star, yy))(y_star)  # ∂f/∂y
-    Jt = jax.jacrev(lambda xx: rhs_fn(xx, y_star))(x_star)  # ∂f/∂t
-    return f_star, Jy, Jt
+
+def _linearize_regularized_rhs(x_star, y_star, model):
+    """
+    Return Taylor expansion coefficients of the *regularized* RHS around (x_star, y_star).
+    Regularized residual: g(x,y) = (1 - M^2) * rhs(x,y)
+    This avoids the division-by-zero singularity at M == 1 when differentiating.
+    """
+
+    def g_fn(xx, yy):
+        base = nozzle_single_phase_core(xx, yy, model)
+        M = base["Ma"]
+        rhs = base["rhs"]
+        return (1.0 - M ** 2) * rhs
+
+    g_star = g_fn(x_star, y_star)
+    Jg_y = jax.jacrev(lambda yy: g_fn(x_star, yy))(y_star)  # ∂g/∂y at (x*, y*)
+    Jg_t = jax.jacrev(lambda xx: g_fn(xx, y_star))(x_star)  # ∂g/∂x at (x*, y*)
+
+    return g_star, Jg_y, Jg_t
 
 
 def _smoothstep(x):
     x = jnp.clip(x, 0.0, 1.0)
     return x * x * (3.0 - 2.0 * x)
-
-    # return x * x * x * (x * (x * 6.0 - 15.0) + 10.0)
-
 
 # -----------------------------------------------------------------------------
 # Converging-diverging nozzle example
@@ -234,7 +229,7 @@ if __name__ == "__main__":
         width=0.003,
         roughness=0e-6,  # m
         T_wall=300.0,  # K
-        Ma_low=0.95,
+        Ma_low=0.99,
         Ma_high=1.0005,
         heat_transfer=0.0,
         wall_friction=1.0,  # 1.0 if friction has to be considered, 0.0 if not
@@ -270,15 +265,15 @@ if __name__ == "__main__":
         solver_name="Dopri5",
         adjoint_name="DirectAdjoint",
         number_of_points=200,
-        rtol=1e-6,
-        atol=1e-6,
+        rtol=1e-4,
+        atol=1e-4,
     )
 
     L_nakagawa = 0.0835
     params_model = replace_param(params_model, "length", L_nakagawa)
    
     # Extract columns as arrays (optional but convenient)
-    df = pd.read_csv("sol9_solutions_case_d1.csv")
+    df = pd.read_csv("nan_a1_results_changing_geom.csv")
 
     L_convergent = df["L_convergent"].values
     Height_in = df["height_in"].values
@@ -297,10 +292,10 @@ if __name__ == "__main__":
     # input_array = jnp.linspace(0, 2e-6, 11)
     # input_array_p = jnp.linspace(80e5, 95e5, 5) 
     # input_array_h = jnp.linspace(290e3, 300e3, 5)
-    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, (1450-1400)))  # Generate colors
+    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, (50-0)))
     solution_list = []
     # failed: 53
-    for i in range(1400, 1450):
+    for i in range(0, 50):
         t0 = time.perf_counter()
         params_model = replace_param(params_model, "L_convergent", L_convergent[i])
         params_model = replace_param(params_model, "height_in", Height_in[i])
