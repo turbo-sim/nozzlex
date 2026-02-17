@@ -18,7 +18,10 @@ fig_1, ax_1 = plt.subplots(figsize=(6, 4))
 ax_1.set_xlabel(r"$Re$ $-$ Reynolds number ")
 ax_1.set_ylabel(r"$C_{f,w}$ $-$ Fanning friction factor")
 for eps, color in zip(roughness_ratios, colors):
-    Cf_w = vcm.get_cf_wall(Re, eps * diameter, diameter)
+    # Assume fully developed flow
+    x = 100 * diameter
+    L_total = x
+    Cf_w = vcm.get_cf_wall(Re, eps * diameter, diameter, x, L_total)
     ax_1.plot(Re, Cf_w, label=rf"$\epsilon/D={eps:.3f}$", color=color)
 
 ax_1.grid(True, which="both", ls="--", lw=0.6)
