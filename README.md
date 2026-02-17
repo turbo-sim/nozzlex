@@ -1,26 +1,35 @@
-# Nozzle-hyperbolic
+# nozzlex
 
+JAX-based Python toolkit for quasi-1D nozzle and vaneless-channel flow modeling, with support for single-phase and two-phase formulations.
 
-## Cloning git repository and installing dependencies
+## What is included
 
-Commands to clone repository, create Conda environment, and install all required packages:
+- **Core package**: `nozzlex/`
+  - `functions/`: collocation/BVP-style single-phase nozzle solvers.
+  - `two_fluid/`: two-fluid nozzle model components.
+  - `homogeneous_equilibrium/`, `homogeneous_nonequilibrium/`, `homogeneous_relaxation/`: two-phase model variants.
+  - `vaneless_channel/`: vaneless diffuser/channel model with friction and heat-transfer options.
+- **Examples**: `examples/` for single-phase, flashing/two-phase, and vaneless diffuser studies.
+- **Project setup**: Poetry project (`pyproject.toml`) targeting Python 3.11–3.13.
+
+## Installation
 
 ```bash
 git clone https://github.com/AndCiof/nozzlex.git
 cd nozzlex
-conda env create -f environment.yaml
-conda activate nozzlex_env
 poetry install
-pip install barotropy # There are some conflicting package, so far it is better to do like this
 ```
 
+## Quick start
 
-## Pushing to git repository
-
-Commands to add changes and push to the remote repository
+Run a vaneless-channel example:
 
 ```bash
-git add <filename>
-git commit -m <commit message>
-git push origin
+cd examples/vaneless_diffuser
+python demo_curved_channel.py
 ```
+
+## Notes
+
+- The package defaults JAX execution to CPU and enables 64-bit mode.
+- Several legacy/demo scripts exist in `examples/` and may represent work-in-progress research workflows.
