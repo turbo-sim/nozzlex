@@ -132,9 +132,9 @@ if __name__ == "__main__":
     fig3.tight_layout()
 
     # # Save figures
-    # jxp.savefig_in_formats(fig1, os.path.join(OUTDIR, "sensitivity_divergence_pressure_recovery"))
-    # jxp.savefig_in_formats(fig2, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss"))
-    # jxp.savefig_in_formats(fig3, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss_distribution"))
+    # vmc.savefig_in_formats(fig1, os.path.join(OUTDIR, "sensitivity_divergence_pressure_recovery"))
+    # vmc.savefig_in_formats(fig2, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss"))
+    # vmc.savefig_in_formats(fig3, os.path.join(OUTDIR, "sensitivity_divergence_pressure_loss_distribution"))
 
     # Show plots
     plt.show()

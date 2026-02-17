@@ -322,13 +322,50 @@ d(\Delta \eta_{loss}) = -(dh - dp/\rho) / (h_{01}- h_1) = T ds / (h_{01}- h_1)
 $$
 
 
+## Thoughts about the design of vaneless diffusers
 
-Observations
+Define the diffusion factor $S$ as  
+$$
+S = \frac{b}{A}\,\frac{dA}{dm}.
+$$
+
+For a radial vaneless diffuser with constant width, the area variation is purely radial, giving  
+$$
+S = \frac{b}{r}.
+$$
+
+By analogy with plane diffusers, where  
+$$
+S = 2\tan\theta,
+$$  
+and where good performance typically occurs for diffuser half-angles $\theta$ between 4° and 8°, we can estimate practical bounds for the width-to-radius ratio at the inlet of a radial diffuser:
+$$
+0.14 < \left(S = \frac{b}{r}\right) < 0.28.
+$$
+Note the the inlet of the diffuser (where the radius is the lowest) is the region where the diffusion factor has its highest value and and separation is most likely to occur.
+
+
+## Thoughts about the design of vaneless diffusers
+
+Defining the diffuson factor $S$ as:
+$$
+S = \frac{b}{A}\frac{dA}{dm}
+$$
+for the special case of a radial vaneless diffuser of constant width gives
+$$
+S = b/r
+$$
+by analogy with plane diffusers where $S=2\tan\theta$, where we know that the region iof higher performance is a when \theta is about 4 to 8 degrees, we can estimate reasonabke bounds for the width-to-radius ratio at the inlet of the diffuser the diffusion factor is the highest and the flow is more prone to separation as
+$0.14 <( S = b/r ) < 0.28$
+
+
+
+**Observations**
 - These value of pressure recovery or efficiency might be higher than unity if the flow is not adiabatic.
 - It is not clear to me how to formulate the stagnation pressure differential in a way that is consistent with $p_0 = p(h_0, s)$
 - Computing the efficiency using the algebraic formula or integrating the differential formulas produces different results due to the reheating effect introduced by losses (similar to the difference between polytropic and isentropic efficiencies).
 
-## Thoughts for the paper
+## Thoughts for a paper
 
 If there is time, we can explain the model for the 90--degree bend including first the flow equations explaining that they where modified for p-h function calls (in agremeent with look-up tables)
 
