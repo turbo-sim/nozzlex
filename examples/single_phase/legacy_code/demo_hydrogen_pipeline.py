@@ -1,4 +1,4 @@
-from nozzlex.duct_modeling import functions
+from examples.single_phase.legacy_code import functions
 import matplotlib.pyplot as plt
 
 def psig_to_Pa(x):
@@ -46,19 +46,19 @@ ax1.set_ylabel("Pressure, Density, and Temperature")
 ax1.plot(
     solution["distance"] / 1e3,
     solution["pressure"] / 1e5,
-    label="Pressure [bar]",
+    label=r"Pressure [bar]",
     color=colors[0],
 )
 ax1.plot(
     solution["distance"] / 1e3,
     solution["density"],
-    label="Density [kg/m$^3$]",
+    label=r"Density [kg/m$^3$]",
     color=colors[1],
 )
 ax1.plot(
     solution["distance"] / 1e3,
     solution["temperature"] - 273.15,
-    label="Temperature [$^\circ$C]",
+    label=r"Temperature [$^\circ$C]",
     color=colors[2],
 )
 
@@ -69,7 +69,7 @@ ax2.set_ylabel("Mach Number")
 ax2.plot(
     solution["distance"] / 1e3,
     solution["mach_number"],
-    label="Mach Number",
+    label=r"Mach Number",
     color=colors[3],
 )
 
@@ -90,19 +90,19 @@ ax.plot(
     solution["distance"] / 1e3,
     solution["pressure"] / solution["pressure"][0],
     linewidth=1.00,
-    label="$p/p_{\mathrm{in}}$",
+    label=r"$p/p_{\mathrm{in}}$",
 )
 ax.plot(
     solution["distance"] / 1e3,
     solution["velocity"] / solution["velocity"][0],
     linewidth=1.00,
-    label="$v/v_{\mathrm{in}}$",
+    label=r"$v/v_{\mathrm{in}}$",
 )
 ax.plot(
     solution["distance"] / 1e3,
     solution["temperature"] / solution["temperature"][0],
     linewidth=1.00,
-    label="$T/T_{\mathrm{in}}$",
+    label=r"$T/T_{\mathrm{in}}$",
 )
 ax.plot(
     solution["distance"] / 1e3,
@@ -114,7 +114,7 @@ ax.plot(
     solution["distance"] / 1e3,
     solution["mach_number"],
     linewidth=1.00,
-    label="$Ma=v/a$",
+    label=r"$Ma=v/a$",
 )
 ax.legend(loc="best")
 figure.tight_layout(pad=1)

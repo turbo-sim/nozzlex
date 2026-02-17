@@ -1,4 +1,4 @@
-from nozzlex.duct_modeling import functions
+from examples.single_phase.legacy_code import functions
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -50,7 +50,7 @@ ax.plot(
     markersize=3.5,
     markeredgewidth=1.00,
     markerfacecolor="w",
-    label="$p/p_{\mathrm{in}}$",
+    label=r"$p/p_{\mathrm{in}}$",
 )
 ax.plot(
     solution["distance"],
@@ -60,7 +60,7 @@ ax.plot(
     markersize=3.5,
     markeredgewidth=1.00,
     markerfacecolor="w",
-    label="$v/v_{\mathrm{in}}$",
+    label=r"$v/v_{\mathrm{in}}$",
 )
 ax.plot(
     solution["distance"],
@@ -70,7 +70,7 @@ ax.plot(
     markersize=3.5,
     markeredgewidth=1.00,
     markerfacecolor="w",
-    label="$T/T_{\mathrm{in}}$",
+    label=r"$T/T_{\mathrm{in}}$",
 )
 ax.plot(
     solution["distance"],
@@ -80,7 +80,7 @@ ax.plot(
     markersize=3.5,
     markeredgewidth=1.00,
     markerfacecolor="w",
-    label="$Ma=v/a$",
+    label=r"$Ma=v/a$",
 )
 ax.legend(loc="best")
 figure.tight_layout(pad=1)
