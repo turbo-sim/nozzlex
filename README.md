@@ -1,35 +1,42 @@
-# nozzlex
+# NozzleX
 
-JAX-based Python toolkit for quasi-1D nozzle and vaneless-channel flow modeling, with support for single-phase and two-phase formulations.
 
-## What is included
 
-- **Core package**: `nozzlex/`
-  - `functions/`: collocation/BVP-style single-phase nozzle solvers.
-  - `two_fluid/`: two-fluid nozzle model components.
-  - `homogeneous_equilibrium/`, `homogeneous_nonequilibrium/`, `homogeneous_relaxation/`: two-phase model variants.
-  - `vaneless_channel/`: vaneless diffuser/channel model with friction and heat-transfer options.
-- **Examples**: `examples/` for single-phase, flashing/two-phase, and vaneless diffuser studies.
-- **Project setup**: Poetry project (`pyproject.toml`) targeting Python 3.11–3.13.
+``NozzleX`` is a JAX/Python package for the one-dimensional modeling of nozzles and diffusers
 
-## Installation
 
-```bash
-git clone https://github.com/AndCiof/nozzlex.git
-cd nozzlex
-poetry install
-```
+## 🛠️ Installation (from source with Poetry)
 
-## Quick start
+This guide walks you through installation for development using `Poetry`, which manages both dependencies and virtual environments automatically.
 
-Run a vaneless-channel example:
 
-```bash
-cd examples/vaneless_diffuser
-python demo_curved_channel.py
-```
+1. **Install Poetry package manager**
+   Follow the official guide: [Poetry Installation](https://python-poetry.org/docs/#installation)  
+   Then verify the installation:
+   ```bash
+   poetry --version
+   ```
 
-## Notes
+2. **Clone the repository from GitHub**
+   ```bash
+   git clone https://github.com/turbo-sim/nozzlex.git
+   ```
 
-- The package defaults JAX execution to CPU and enables 64-bit mode.
-- Several legacy/demo scripts exist in `examples/` and may represent work-in-progress research workflows.
+3. **Navigate to the project directory**
+   
+   ```bash
+   cd nozzlex
+   ```
+
+4. **Install the package using Poetry**
+   
+   ```bash
+   poetry install
+   ```
+
+
+## 📂 Examples
+
+The [examples](examples) directory contains a variety of ready-to-run cases, covering different working fluids and applications.
+
+
