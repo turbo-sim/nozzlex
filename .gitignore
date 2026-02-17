@@ -61,6 +61,7 @@ environment.pickle
 
 # Environment directories
 .env
+.venv/
 venv/
 
 
