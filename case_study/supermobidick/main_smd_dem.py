@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import nozzlex.functions_old.functions_dem_smd as function
+import nozzlex.delayed_equilibrium.functions_dem_smd as function
 import yaml
 import time
 import pandas as pd
@@ -64,7 +64,7 @@ function.print_dict(case_data)
 print(" ")
 print("Mach at the inlet:                         ", f"{solution["mach_number"][0]:.4f}", "(-)")
 print("Mach at the throat:                        ", f"{solution["mach_number"][-1]:.4f}", "(-)")
-print("Critical lenght:                           ", f"{solution["distance"][-1]:.4f}", "(m)")
+print("Critical lenght:                           ", f"{solution["z"][-1]:.4f}", "(m)")
 # print("Flow rate:                                 ", f"{flow_rate:.7f}", "(kg/s)")
 print("PIF number of iterations:                  ", pif_iterations)
 print("Computation time:                          ", f"{duration:.4f} seconds")
@@ -85,7 +85,7 @@ ax1 = axs[0, 0]
 ax1.set_xlabel("Axis position [-]", fontsize=14)
 ax1.set_ylabel("Normalized static pressure [-]", fontsize=14)
 ax1.plot(
-    solution["distance"],
+    solution["z"],
     solution["pressure"],
     linewidth=1.00,
     marker="o",
@@ -101,7 +101,7 @@ ax2 = axs[0, 1]
 ax2.set_xlabel("Axis position [-]", fontsize=14)
 ax2.set_ylabel("Density", fontsize=14)
 ax2.plot(
-    solution["distance"],
+    solution["z"],
     solution["density"],
     linewidth=1.00,
     marker="o",
@@ -117,7 +117,7 @@ ax3 = axs[1, 0]
 ax3.set_xlabel("Axis position [-]", fontsize=14)
 ax3.set_ylabel("Mach [-]", fontsize=14)
 ax3.plot(
-    solution["distance"],
+    solution["z"],
     solution["mach_number"],
     linewidth=1.00,
     marker="o",
@@ -133,7 +133,7 @@ ax4 = axs[1, 1]
 ax4.set_xlabel("Axis position [-]", fontsize=14)
 ax4.set_ylabel("Void fraction[-]", fontsize=14)
 ax4.plot(
-    solution["distance"],
+    solution["z"],
     solution["void_fraction"],  # Replace with density if available
     linewidth=1.00,
     marker="o",

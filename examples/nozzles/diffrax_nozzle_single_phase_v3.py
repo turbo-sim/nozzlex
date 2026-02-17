@@ -1,4 +1,5 @@
 import time
+import pandas as pd
 import jax
 import jax.numpy as jnp
 import diffrax as dfx
@@ -45,7 +46,7 @@ def transonic_nozzle_single_phase(
     then integrates the ODE system with a blended RHS near the critical location.
     """
 
-    Ma_in_cr = compute_critical_inlet(Ma_lower=0.001, Ma_upper=0.4, params_model=params_model, params_solver=params_ivp)
+    Ma_in_cr = compute_critical_inlet(Ma_lower=0.001, Ma_upper=0.2, params_model=params_model, params_solver=params_ivp)
 
     state_in = compute_static_state(
         params_model.p0_in,
@@ -70,7 +71,7 @@ def transonic_nozzle_single_phase(
     y_inlet = jnp.array([p_in, v_in, h_in])
     event1 = dfx.Event(
         cond_fn=_mach_event_cond,
-        root_finder=optx.Bisection(rtol=1e-6, atol=1e-6),
+        root_finder=optx.Bisection(rtol=1e-9, atol=1e-9),
     )
     term1 = dfx.ODETerm(ode_rhs_subsonic)
     save1 = dfx.SaveAt(t1=True, fn=ode_full_subsonic)
@@ -92,22 +93,35 @@ def transonic_nozzle_single_phase(
     # --- 3. Linearization close to critical point ---
     x_crit = sol1.ys["x"][-1]
     y_crit = jnp.array([sol1.ys["p"][-1], sol1.ys["v"][-1], sol1.ys["h"][-1]])
-    f_star, Jy, Jt = _linearize_rhs_at(x_crit, y_crit, params_model)
+
+    # Regularized linearization (linearize g = (1-M^2)*rhs )
+    g_star, Jg_y, Jg_t = _linearize_regularized_rhs(x_crit, y_crit, params_model)
+
+    eps_reg = 1e-12  # small regularization to avoid exact division by 0
 
     def ode_full_transonic(t, y, args):
+        # jax.debug.print("x={x} | y={y}", x=t, y=y)
         base = nozzle_single_phase_core(t, y, args)
-        M = base["Ma"]
+        Ma = base["Ma"]
         rhs_true = base["rhs"]
-        rhs_lin = f_star + Jy @ (y - y_crit) + Jt * (t - x_crit)
+
+        # Reconstruct linearized rhs from linearization of g = (1-M^2)*rhs
+        g_lin = g_star + (Jg_y @ (y - y_crit)) + (Jg_t * (t - x_crit))
+        denom = (1.0 - Ma ** 2) + eps_reg
+        rhs_lin = g_lin / denom
 
         # Start blending slightly after sonic conditions, finish at Ma_high
-        Ma_start = 1.001
+        Ma_start = 1.00001
         Ma_end = args.Ma_high
-        s = (M - Ma_start) / (Ma_end - Ma_start)
+        s = (Ma - Ma_start) / (Ma_end - Ma_start)
         w = _smoothstep(jnp.clip(s, 0.0, 1.0))  # smoothly 0→1 in that narrow range
         rhs_blend = (1.0 - w) * rhs_lin + w * rhs_true
-        in_window = (M >= args.Ma_low) & (M <= args.Ma_high)
-        rhs_blend = jnp.where(in_window, rhs_blend, rhs_true)
+
+        in_window = (Ma >= args.Ma_low) & (Ma <= args.Ma_high)
+        blend_window = (Ma >= Ma_start) & (Ma <= args.Ma_high)
+
+        # On the blend interval use blended model, slightly before start use linear, outside window use true rhs.
+        rhs_blend = jnp.where(in_window, jnp.where(blend_window, rhs_blend, rhs_lin), rhs_true)
 
         return {**base, "rhs": rhs_true, "rhs_blend": rhs_blend}
 
@@ -115,14 +129,12 @@ def transonic_nozzle_single_phase(
         return ode_full_transonic(t, y, args)["rhs_blend"]
 
     # --- 4. Second pass ---
-
     event_low_pressure = dfx.Event(
         cond_fn=_low_pressure_event_cond,
         root_finder=optx.Bisection(rtol=1e-6, atol=1e-6),
     )
 
-    # TODO, perhaps it is more robust to do 1 pass for each segment instead of attempting a single pass?
-    ts2 = jnp.linspace(1e-9, params_model.length, params_ivp.number_of_points)
+    ts2 = jnp.linspace(1e-9, params_model.L_convergent, params_ivp.number_of_points)
     term2 = dfx.ODETerm(ode_rhs_transonic)
     save2 = dfx.SaveAt(ts=ts2, t1=True, fn=ode_full_transonic)
     sol2 = dfx.diffeqsolve(
@@ -147,32 +159,41 @@ def _mach_event_cond(t, y, args, **kwargs):
     """Event function: zero when M^2 - Ma_low^2 = 0."""
     p, v, h = y
     a = args.fluid.get_state(jxp.HmassP_INPUTS, h, p)["a"]
-    Ma_sqr = (v / a)**2
-    return Ma_sqr - args.Ma_low**2
+    Ma_sqr = (v / a) ** 2
+    return Ma_sqr - args.Ma_low ** 2
+
 
 def _low_pressure_event_cond(t, y, args, **kwargs):
     """Event function: avoid too long pressures"""
     p, v, h = y
     cond = p - args.p_termination
     # jax.debug.print("t = {t:.3e}, p = {p:.6e}, cond = {cond:.6e}", t=t, p=p, cond=cond)
-
     return cond
 
-def _linearize_rhs_at(x_star, y_star, model):
-    """Return Taylor expansion coefficients of RHS around (x_star, y_star)."""
-    rhs_fn = lambda xx, yy: nozzle_single_phase_core(xx, yy, model)["rhs"]
-    f_star = rhs_fn(x_star, y_star)  # RHS at expansion point
-    Jy = jax.jacrev(lambda yy: rhs_fn(x_star, yy))(y_star)  # ∂f/∂y
-    Jt = jax.jacrev(lambda xx: rhs_fn(xx, y_star))(x_star)  # ∂f/∂t
-    return f_star, Jy, Jt
+
+def _linearize_regularized_rhs(x_star, y_star, model):
+    """
+    Return Taylor expansion coefficients of the *regularized* RHS around (x_star, y_star).
+    Regularized residual: g(x,y) = (1 - M^2) * rhs(x,y)
+    This avoids the division-by-zero singularity at M == 1 when differentiating.
+    """
+
+    def g_fn(xx, yy):
+        base = nozzle_single_phase_core(xx, yy, model)
+        M = base["Ma"]
+        rhs = base["rhs"]
+        return (1.0 - M ** 2) * rhs
+
+    g_star = g_fn(x_star, y_star)
+    Jg_y = jax.jacrev(lambda yy: g_fn(x_star, yy))(y_star)  # ∂g/∂y at (x*, y*)
+    Jg_t = jax.jacrev(lambda xx: g_fn(xx, y_star))(x_star)  # ∂g/∂x at (x*, y*)
+
+    return g_star, Jg_y, Jg_t
 
 
 def _smoothstep(x):
     x = jnp.clip(x, 0.0, 1.0)
     return x * x * (3.0 - 2.0 * x)
-
-    # return x * x * x * (x * (x * 6.0 - 15.0) + 10.0)
-
 
 # -----------------------------------------------------------------------------
 # Converging-diverging nozzle example
@@ -183,10 +204,10 @@ fluid_name = "CO2"
 backend = "HEOS"
 h_min = 10e3  # J/kg
 h_max = 550e3  # J/kg
-p_min = 7e5    # Pa
+p_min = 6e5    # Pa
 p_max = 150e5   # Pa
-N_h = 60
-N_p = 60
+N_h = 50
+N_p = 50
 
 if __name__ == "__main__":
 
@@ -197,16 +218,21 @@ if __name__ == "__main__":
     # -- 1. Find critical state with continuation --
 
     params_model = NozzleParams(
-        p0_in=91e5,  # Pa 
-        h0_in=310.0047e3,
+        p0_in=9288492.359,  # Pa 
+        h0_in=310309.245,
         # D_in=0.050,  # m
         # length=5.00,  # m
-        roughness=1e-6,  # m
+        L_convergent=0.02735,
+        height_in=0.005,
+        height_throat=0.00012,
+        height_out=0.00027,
+        width=0.003,
+        roughness=0e-6,  # m
         T_wall=300.0,  # K
-        Ma_low=0.95,
-        Ma_high=1.025,
+        Ma_low=0.99,
+        Ma_high=1.0005,
         heat_transfer=0.0,
-        wall_friction=0.0,
+        wall_friction=1.0,  # 1.0 if friction has to be considered, 0.0 if not
         p_termination=p_min,
         # fluid=jxp.FluidPerfectGas("CO2", T_ref=300, p_ref=101325),
         # fluid=jxp.FluidJAX(name="CO2", backend="HEOS"),
@@ -219,6 +245,7 @@ if __name__ == "__main__":
                                  N_h=N_h,
                                  N_p=N_p),
         geometry=linear_convergent_divergent_nozzle,
+        two_phase_friction="Beattie",
     )
 
     params_bvp = BVPSettings(
@@ -238,24 +265,46 @@ if __name__ == "__main__":
         solver_name="Dopri5",
         adjoint_name="DirectAdjoint",
         number_of_points=200,
-        rtol=1e-8,
-        atol=1e-8,
+        rtol=1e-4,
+        atol=1e-4,
     )
 
-    L_nakagawa = 83.50e-3
+    L_nakagawa = 0.0835
     params_model = replace_param(params_model, "length", L_nakagawa)
+   
+    # Extract columns as arrays (optional but convenient)
+    df = pd.read_csv("nan_a1_results_changing_geom.csv")
+
+    L_convergent = df["L_convergent"].values
+    Height_in = df["height_in"].values
+    Height_throat = df["height_throat"].values
+    Height_out = df["height_out"].values
+    Width = df["width"].values
+    Roughness = df["roughness"].values
+    P0_in = df["p0_in"].values
+    H0_in = df["h0_in"].values
 
 
     # Solve the problem
     print("\n" + "-" * 60)
     print("Evaluating transonic solution")
     print("-" * 60)
-    input_array = jnp.asarray([92, 91, 90]) * 1e5
-    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, len(input_array)))  # Generate colors
+    # input_array = jnp.linspace(0, 2e-6, 11)
+    # input_array_p = jnp.linspace(80e5, 95e5, 5) 
+    # input_array_h = jnp.linspace(290e3, 300e3, 5)
+    colors = plt.cm.magma(jnp.linspace(0.2, 0.8, (50-0)))
     solution_list = []
-    for i, p0_in in enumerate(input_array):
+    # failed: 53
+    for i in range(0, 50):
         t0 = time.perf_counter()
-        params_model = replace_param(params_model, "p0_in", p0_in)
+        params_model = replace_param(params_model, "L_convergent", L_convergent[i])
+        params_model = replace_param(params_model, "height_in", Height_in[i])
+        params_model = replace_param(params_model, "height_throat", Height_throat[i])
+        params_model = replace_param(params_model, "height_out", Height_out[i])
+        params_model = replace_param(params_model, "width", Width[i])
+        params_model = replace_param(params_model, "p0_in", P0_in[i])
+        params_model = replace_param(params_model, "h0_in", H0_in[i])
+
         sol = transonic_nozzle_single_phase(params_model, params_bvp, params_ivp)
 
         # Relative error diagnostics
@@ -288,7 +337,7 @@ if __name__ == "__main__":
 
     # --- row 1: pressure (bar): solid p0, dashed p ---
     axs[0].set_ylabel("Pressure (bar)")
-    for color, val, sol in zip(colors, input_array, solution_list):
+    for color, sol in zip(colors, solution_list):
         x = sol.ys["x"]
         # axs[0].plot(x, sol.ys["p0"] * 1e-5, linestyle="--", color=color)
         axs[0].plot(
@@ -297,32 +346,33 @@ if __name__ == "__main__":
             linestyle="-",
             color=color,
             marker="o",
-            markersize="3",
-            label = rf"$p_{{0,\mathrm{{in}}}} = {val:0.3f}$"
+            markersize="1",
+            # label = rf"$P_0 = {val:0.3e}$"
         )
     axs[0].legend(loc="upper right", fontsize=7)
 
     # --- row 2: Mach number ---
     axs[1].set_ylabel("Mach number (-)")
-    for color, val, sol in zip(colors, input_array, solution_list):
+    for color, sol in zip(colors, solution_list):
         axs[1].plot(
             sol.ys["x"],
             sol.ys["Ma"],
             color=color,
             marker="o",
-            markersize="3",
+            markersize="1",
         )
 
     # Static and stagnation enthalpy
-    axs[2].set_ylabel("Enthalpy (J/kg)")
-    for color, val, sol in zip(colors, input_array, solution_list):
-        # axs[2].plot(sol.ys["x"], sol.ys["h"], color=r["color"], markersize=3, marker"o")
-        axs[2].plot(sol.ys["x"], sol.ys["h"], color=color, markersize=3, marker="o")
+    axs[2].set_ylabel("Quality (-)")
+    for color, sol in zip(colors, solution_list):
+        # var = 4 * sol.ys["A"] / sol.ys["Q"]
+        axs[2].plot(sol.ys["x"], sol.ys["Q"], color=color, markersize=3, marker="o")
+        # axs[2].plot(sol.ys["x"], var, color=color, markersize=1, marker="o")
 
     # Entropy
-    axs[3].set_ylabel("Quality")
-    for color, val, sol in zip(colors, input_array, solution_list):
-        axs[3].plot(sol.ys["x"], sol.ys["Q"], color=color, markersize=3, marker="o")
+    axs[3].set_ylabel("Enthalpy (-)")
+    for color, sol in zip(colors, solution_list):
+        axs[3].plot(sol.ys["x"], sol.ys["Re"], color=color, markersize=1, marker="o")
 
     # --- row 3: nozzle geometry ---
     axs[4].fill_between(xg, -rg, +rg, color="lightgrey")  # shaded nozzle
@@ -336,10 +386,16 @@ if __name__ == "__main__":
     fig.tight_layout(pad=1)
 
 
-
     fluid = jxp.Fluid(name="CO2", backend="HEOS")
-    fig, ax = fluid.plot_phase_diagram(x_prop="s", y_prop="T", plot_quality_isolines=True)
-    ax.plot(sol.ys["s"], sol.ys["T"], "ko")
+    fig, ax = fluid.plot_phase_diagram(x_prop="h", y_prop="p", plot_quality_isolines=True)
+    for color, sol in zip(colors, solution_list):
+        ax.plot(
+            sol.ys["h"],
+            sol.ys["p"],
+            color=color,
+            marker="o",
+            markersize="1",
+        )
 
     # Show figures
     plt.show()

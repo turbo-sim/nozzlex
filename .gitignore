@@ -74,3 +74,5 @@ venv/
 
 **/fluid_tables/
 **/verification_figures/
+
+nozzlex/delayed_equilibrium/
