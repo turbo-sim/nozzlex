@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import nozzlex.functions_old.functions_dem_smd as function
+import nozzlex.delayed_equilibrium.functions_dem_smd as function
 import yaml
 import time
 import os
