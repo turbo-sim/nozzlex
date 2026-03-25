@@ -77,3 +77,5 @@ venv/
 **/verification_figures/
 
 nozzlex/delayed_equilibrium/
+
+**/**cache**/

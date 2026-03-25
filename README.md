@@ -1,26 +1,42 @@
-# Nozzle-hyperbolic
+# NozzleX
 
 
-## Cloning git repository and installing dependencies
 
-Commands to clone repository, create Conda environment, and install all required packages:
-
-```bash
-git clone https://github.com/AndCiof/nozzlex.git
-cd nozzlex
-conda env create -f environment.yaml
-conda activate nozzlex_env
-poetry install
-pip install barotropy # There are some conflicting package, so far it is better to do like this
-```
+``NozzleX`` is a JAX/Python package for the one-dimensional modeling of nozzles and diffusers
 
 
-## Pushing to git repository
+## 🛠️ Installation (from source with Poetry)
 
-Commands to add changes and push to the remote repository
+This guide walks you through installation for development using `Poetry`, which manages both dependencies and virtual environments automatically.
 
-```bash
-git add <filename>
-git commit -m <commit message>
-git push origin
-```
+
+1. **Install Poetry package manager**
+   Follow the official guide: [Poetry Installation](https://python-poetry.org/docs/#installation)  
+   Then verify the installation:
+   ```bash
+   poetry --version
+   ```
+
+2. **Clone the repository from GitHub**
+   ```bash
+   git clone https://github.com/turbo-sim/nozzlex.git
+   ```
+
+3. **Navigate to the project directory**
+   
+   ```bash
+   cd nozzlex
+   ```
+
+4. **Install the package using Poetry**
+   
+   ```bash
+   poetry install
+   ```
+
+
+## 📂 Examples
+
+The [examples](examples) directory contains a variety of ready-to-run cases, covering different working fluids and applications.
+
+
