@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import nozzlex.delayed_equilibrium.functions_dem_nakagawa as function
+import nozzlex.delayed_equilibrium.functions_dem_nakagawa_p_flag as function
+# import nozzlex.delayed_equilibrium.functions_dem_nakagawa_back_up as function
+
 import yaml
 import time
 import barotropy as bpy
@@ -107,7 +109,7 @@ ax1.legend(loc="best")
 # Second subplot - Velocity
 ax2 = axs[0, 1]
 ax2.set_xlabel("Axis position [-]", fontsize=14)
-ax2.set_ylabel("Quality", fontsize=14)
+ax2.set_ylabel("Determinant", fontsize=14)
 ax2.plot(
     subsonic_solution["z"],
     subsonic_solution["quality"],
@@ -158,10 +160,10 @@ ax3.legend(loc="best")
 
 # Fourth subplot - Density
 ax4 = axs[1, 1]
-ax4.set_xlabel("Axis position [-]", fontsize=14)
+ax4.set_xlabel("z", fontsize=14)
 ax4.set_ylabel("Gamma [-]", fontsize=14)
 ax4.plot(
-    subsonic_solution["pressure"],
+    subsonic_solution["z"],
     subsonic_solution["gamma"],  # Replace with density if available
     linewidth=1.00,
     marker="o",
@@ -171,36 +173,19 @@ ax4.plot(
     label="Critical flow",
 )
 ax4.plot(
-    supersonic_solution["pressure"],
+    supersonic_solution["z"],
     supersonic_solution["gamma"],  # Replace with density if available
     linewidth=1.00,
     marker="o",
     markersize=3.5,
-    markeredgewidth=1.00,
-    markerfacecolor="w",
+    markeredgewidth=1.00,markerfacecolor="w",
     label="Critical flow",
 )
 ax4.legend(loc="best")
 
-fig.tight_layout(pad=1.0)
-
-
-# ====================================================
-# === 5. SAVE SOLUTION AS CSV                      ===
-# ====================================================
-
-# # Create post_processing folder if not existing
-# output_dir = os.path.join(os.path.dirname(__file__), "post_processing")
-# os.makedirs(output_dir, exist_ok=True)
-
-# # Convert solution dict into a DataFrame
-# df = pd.DataFrame(solution)
-
-# # Save CSV inside post_processing
-# output_file = os.path.join(output_dir, "results_120a.csv")
-# df.to_csv(output_file, index=False)
-
-# print(f"Solution saved to {output_file}")
-
-
+fig2, ax2 = fluid.plot_phase_diagram()
+ax2.plot(subsonic_solution["entropy"], subsonic_solution["temperature"], "o-")
+ax2.plot(supersonic_solution["entropy"], supersonic_solution["temperature"], "o-")
+fig2.tight_layout()
+fig.tight_layout()
 plt.show()
