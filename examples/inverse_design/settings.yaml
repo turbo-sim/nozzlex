@@ -1,0 +1,38 @@
+fluid_name: cyclopentane
+backend: REFPROP
+roughness: 1.0e-6
+inlet_opening: 10.0e-3
+width: 15.0e-3
+u_in: 10.0
+isentropic: true  # also run/plot the closed-form isentropic cross-check
+
+cases:
+  - label: Case 1
+    p0_total: 2.5e+5
+    Q0: 0.0
+    p_out: 0.9e+5
+
+  - label: Case 2
+    p0_total: 2.5e+5
+    Q0: 0.1
+    p_out: 0.9e+5
+
+  - label: Case 3
+    p0_total: 2.5e+5
+    Q0: 0.3
+    p_out: 0.9e+5
+
+  - label: Case 4
+    p0_total: 3.5e+5
+    Q0: 0.0
+    p_out: 0.9e+5
+
+  - label: Case 5
+    p0_total: 3.5e+5
+    Q0: 0.1
+    p_out: 0.9e+5
+
+  - label: Case 6
+    p0_total: 3.5e+5
+    Q0: 0.3
+    p_out: 0.9e+5
