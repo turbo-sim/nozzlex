@@ -27,3 +27,4 @@ from . import homogeneous_nonequilibrium
 from . import homogeneous_relaxation
 from . import two_fluid
 from . import vaneless_channel
+from . import inverse_design
