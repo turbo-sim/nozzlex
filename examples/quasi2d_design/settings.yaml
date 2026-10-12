@@ -1,0 +1,106 @@
+# Exemplary case for the quasi-2D (centerline + wall pressure) inverse
+# design method. See run_quasi2d_design.py for the method itself and
+# docs/inverse_design_2d.md for the theory / caveats.
+#
+# Pressure profile construction -- shared convergent curve, then two
+# INDEPENDENT divergent branches with different shapes:
+#
+# 1. Convergent section (0 -> x_sonic): 3-CP quadratic NURBS, control
+#    points [(0, p_in), (conv_handle_frac*x_sonic, p_in), (x_sonic, p_sonic)].
+#    p_sonic is the PHYSICAL sonic pressure -- a pure property of (fluid,
+#    s_in, h0), solved directly (1D root-find, no marching/iteration
+#    needed: the sonic pressure doesn't depend on how p varies with x at
+#    all). You choose x_sonic -- WHERE along the nozzle that pressure
+#    occurs -- as a free design parameter below. The bifurcation point
+#    and the physical sonic condition coincide by construction: whatever
+#    x_sonic you pick, the flow really is sonic there, because we solved
+#    for the pressure that makes it so. Used IDENTICALLY by both
+#    centerline and wall (see solve_convergent_ctrl in
+#    run_quasi2d_design.py).
+#
+#    conv_handle_frac (default 0.6) sets the middle control point's x as
+#    a fraction of x_sonic -- it must be < 1 (strictly before x_sonic).
+#    Setting it to 1 would put the handle at the SAME x as the endpoint,
+#    which forces an almost-vertical incoming slope right at the throat.
+#
+# 2a. Divergent CENTERLINE (x_sonic -> 1): a smooth 4-CP CUBIC NURBS from
+#    the throat to a kink point, then a FLAT line (p = p_out) from the
+#    kink to the exit -- smooth (C1) at BOTH ends, not just the throat:
+#      CP1 (join)  fixed  = (x_sonic, p_sonic).
+#      CP2         x is FREE -- set via center_x2 (must be > x_sonic);
+#                  p_frac solved so CP2 lies on the convergent curve's
+#                  own incoming tangent line, guaranteeing dp/dx is
+#                  CONTINUOUS at the throat.
+#      CP3         x is FREE -- set via center_ctrl3_x (between center_x2
+#                  and the kink); p_frac fixed = 1.0 (same as CP4).
+#      CP4 (kink)  fixed p_frac=1.0; x is `center_kink_frac` in [0,1] as a
+#                  fraction of the divergent span (0 = kink at the throat
+#                  -- fully flat; 1 = kink at the exit -- no flat part).
+#                  Because CP3 and CP4 share the same p_frac, the curve's
+#                  tangent AT the kink is horizontal, matching the flat
+#                  tail's own zero slope -- so the whole trace is smooth
+#                  all the way from the throat to the last node before
+#                  the exit, not just kinked into the flat part.
+#
+# 2b. Divergent WALL (x_sonic -> 1): a 4-CP CUBIC NURBS branch --
+#    CP1 (join)  fixed  = (x_sonic, p_sonic).
+#    CP2         x is FREE -- set directly via wall_x2 (must be >
+#                x_sonic). p_frac is NOT free: it's solved so CP2 lies on
+#                the SAME line as the convergent curve's own incoming
+#                tangent at the join, extended past it, guaranteeing dp/dx
+#                is CONTINUOUS at the join.
+#    CP3         FULLY FREE -- both x and p_frac, set directly via
+#                wall_ctrl3 as [x, p_frac]. Leave its p_frac at 1.0
+#                (matching the exit point) to get dp/dx = 0 (flat)
+#                exactly at the exit; move it off 1.0 for a nonzero exit
+#                slope.
+#    CP4 (exit)  fixed  = (1.0, 1.0).
+#
+# Every control point is [x, p_frac], x in x/L, p_frac in [0,1] mapping
+# to an actual pressure via p = p_in - p_frac*(p_in - p_out)
+# (0 -> p_in, 1 -> p_out).
+#
+# The console prints where M=1 actually ends up for each streamline after
+# marching -- should equal x_sonic below.
+
+fluid_name: MM
+backend: REFPROP        # HEOS fails to compute the critical point for this fluid
+
+inlet_opening: 15.0e-3   # full inlet height (2 * half-height), m
+width: 5.0e-3            # duct depth (into page), m
+u_in: 10.0
+
+L_nominal_factor: 3.5    # L_nominal = L_nominal_factor * inlet_opening
+
+compare_1d: true         # also overlay the equivalent 1D inverse-design shape (using p_center(x))
+compare_moc: false        # also overlay a real-MOC-designed nozzle (moc.design_nozzle) for the same fluid/conditions
+
+# false: p_wall(x) is a genuine fixed input, same as p_center(x) -- h(x) follows
+#        directly from mass conservation, no iteration. The curvature-consistency
+#        diagnostic is then purely informational (not enforced).
+# true:  p_wall(x) above is only an INITIAL GUESS -- it gets corrected iteratively
+#        until curvature-consistent with p_center(x) (radial equilibrium).
+correct_wall_pressure: false
+
+cases:
+  - label: Case 1
+    p0_total: 478e+3
+    Q0: 0.3
+    p_out: 40.95e+3
+    x_sonic: 0.3   # where along x/L the sonic point sits (your choice)
+    conv_handle_frac: 0.8   # convergent curve's own handle, as a fraction of x_sonic
+
+    # divergent centerline: smooth 4-CP cubic NURBS into a flat tail,
+    # smooth at BOTH ends. CP2 x (> x_sonic, p_frac solved for throat
+    # tangency), CP3 x (between center_x2 and the kink, p_frac fixed at
+    # 1.0), and the kink (start of the flat tail, also p_frac=1.0) as a
+    # fraction of the divergent span (0 = kink at throat, 1 = kink at exit).
+    center_x2: 0.45
+    center_ctrl3_x: 0.55
+    center_kink_frac: 0.6
+
+    # divergent wall (cubic NURBS): CP2 x position (must be > x_sonic,
+    # p_frac solved automatically for throat tangency), and CP3 fully
+    # free [x, p_frac] (p_frac=1.0 -> flat at the exit).
+    wall_x2: 0.3
+    wall_ctrl3: [0.3, 1.0]
