@@ -1,63 +1,3 @@
-# -----------------------------------------------------------------------------
-# Overview
-# -----------------------------------------------------------------------------
-# This script implements a collocation-based solver for 1D quasi-1D nozzle flow
-# using JAX, Optimistix, and Equinox. It supports two problem formulations:
-#   1. "mach_in"    – solve with a prescribed inlet Mach number.
-#   2. "mach_crit"  – solve with a prescribed maximum (critical) Mach number.
-#
-# Main components:
-#
-# 1. Data containers
-#    - NozzleParams     : Stores all geometric, inlet, and target flow parameters.
-#    - SolverSettings   : Stores numerical solver configuration (e.g., tolerances,
-#                         solver type, collocation points, solve mode).
-#    - ResidualParams   : Groups model, fluid, and discretization data for residuals.
-#
-# 2. Main solver
-#    - solve_nozzle_model_collocation() :
-#        Given an initial guess and problem parameters, builds the appropriate
-#        residual function (based on solve_mode), sets up the nonlinear solver,
-#        and returns the converged flowfield and solver statistics.
-#
-# 3. Residual functions
-#    - build_residual_vector_mach_inlet()   : Residual formulation enforcing a
-#                                             target inlet Mach number.
-#    - build_residual_vector_mach_critical(): Residual formulation enforcing a
-#                                             target maximum Mach number within
-#                                             the domain, found via Newton search.
-#
-# 4. Flowfield utilities
-#    - find_maximum_mach()    : Finds the location and value of the maximum Mach
-#                               number in the domain from Chebyshev-Lobatto data.
-#    - compute_static_state() : Computes static flow state from stagnation state
-#                               and Mach number.
-#    - split_z()              : Unpacks concatenated solution vector into velocity,
-#                               log-density, and log-pressure arrays.
-#    - evaluate_ode_rhs()     : Evaluates the nozzle right-hand-side model at all
-#                               collocation points.
-#    - initialize_flowfield() : Generates an initial guess for the solver using
-#                               a parabolic Mach profile.
-#
-# 5. Chebyshev-Lobatto utilities
-#    - chebyshev_lobatto_basis()                : Returns collocation nodes and
-#                                                 differentiation matrix.
-#    - chebyshev_lobatto_interpolate()          : Interpolates nodal data at given
-#                                                 points (value only).
-#    - chebyshev_lobatto_interpolate_and_derivative():
-#                                                 Interpolates nodal data and
-#                                                 returns derivative.
-#
-# 6. Helper
-#    - replace_param() : Creates a copy of an Equinox module with one field replaced.
-#
-# Workflow:
-#    (a) Define NozzleParams and SolverSettings.
-#    (b) Generate an initial guess with initialize_flowfield().
-#    (c) Call solve_nozzle_model_collocation() with chosen solve_mode.
-#    (d) Post-process output data (e.g., interpolate for plotting).
-# -----------------------------------------------------------------------------
-
 from __future__ import annotations
 import jax
 import jax.numpy as jnp
@@ -74,9 +14,12 @@ from .nozzle_model_core import (
     get_speed_of_sound_mixture,
     nozzle_homogeneous_non_equilibrium_autonomous,
     nozzle_homogeneous_non_equilibrium_core,
+    nozzle_homogeneous_non_equilibrium_one_component_autonomous,
+    nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth,
+    nozzle_homogeneous_non_equilibrium_one_component_core,
     compute_inlet_state_hne,
+    compute_inlet_state_hne_one_component,
 )
-
 
 # shorthand factory for float64 arrays
 def f64(value):
@@ -84,10 +27,7 @@ def f64(value):
         default_factory=lambda: jnp.array(value, dtype=jnp.float64), static=False
     )
 
-
 class NozzleParams(eqx.Module):
-    fluid1: Any = eqx.field(static=False)
-    fluid2: Any = eqx.field(static=False)
     geometry: Callable = eqx.field(static=True)
     p0_in: jnp.ndarray = f64(1.0e5)  # Pa
     T01_in: jnp.ndarray = f64(300)
@@ -97,9 +37,17 @@ class NozzleParams(eqx.Module):
     Ma_in: jnp.ndarray = f64(0.005)
     Ma_low: jnp.ndarray = f64(0.05)
     Ma_high: jnp.ndarray = f64(0.99)
-    heat_transfer: jnp.ndarray = f64(0.0)
-    wall_friction: jnp.ndarray = f64(0.0)
+    heat_transfer: jnp.ndarray = f64(1.0)
+    wall_friction: jnp.ndarray = f64(1.0)
+    alpha1_in: jnp.ndarray = f64(1e-12)
+    alpha2_in: jnp.ndarray = f64(1.0)
     mixture_ratio: jnp.ndarray = f64(50)
+    bubble_number: jnp.ndarray = f64(1e12)
+    droplet_number: jnp.ndarray = f64(1e8)
+    alpha_b: jnp.ndarray = f64(0.3)
+    alpha_d: jnp.ndarray = f64(0.7)
+    fluid1: Any = eqx.field(static=False, default=None)
+    fluid2: Any = eqx.field(static=False, default=None)
 
 
 class BVPSettings(eqx.Module):
@@ -144,66 +92,9 @@ SOLVER_MAPPING = {
     "Bisection": optx.Bisection,
 }
 
-
-# ---------- Compute static state from stagnation and Mach number ----------
-# def compute_static_state(p0, d0, Ma, fluid):
-#     st0 = fluid.get_state(jxp.DmassP_INPUTS, d0, p0)
-#     s0, h0 = st0["s"], st0["h"]
-
-#     # Scalar residual for Bisection
-#     def residual(p, _):
-#         st = fluid.get_state(jxp.PSmass_INPUTS, p, s0)
-#         a, h = st["a"], st["h"]
-#         return h0 - h - 0.5 * (a * Ma)**2
-
-#     solver = optx.Bisection(rtol=1e-3, atol=1e-3)
-#     lower, upper = 0.4 * p0, p0
-#     sol = optx.root_find(residual, solver, y0=0.99 * p0, options={"lower": lower, "upper": upper})
-#     state = fluid.get_state(jxp.PSmass_INPUTS, sol.value, s0)
-#     return state
-
-# Specific for
-
-# def compute_static_state(p0, T01, T02, Ma, R, fluid1, fluid2):
-#     jax.debug.print("p={p}, T1={T01}, T2={T02}, Ma={Ma}",p=p0, T01=T01, T02=T02, Ma=Ma)
-#     st01 = fluid1.get_state(jxp.PT_INPUTS, p0, T01)
-#     s01, h01, G1, a1, rho1 = st01["s"], st01["h"], st01["G"], st01["a"], st01["d"]
-
-#     st02 = fluid2.get_state(jxp.PT_INPUTS, p0, T02)
-#     s02, G2, a2, rho2 = st02["s"], st02["G"], st02["a"], st02["d"]
-
-#     q_in = 1/ (1 + R)
-#     # alpha2 = 1 / (1 + ((1 - q_in) / q_in) * (rho1 / rho2))
-#     # alpha1 = 1 - alpha2
-
-#     # a_mix = get_speed_of_sound_mixture(G1, alpha1, a1, rho1, G2, alpha2, a2, rho2)
-
-#     # Scalar residual for Bisection
-#     def residual1(p, _):
-#         st = fluid1.get_state(jxp.PSmass_INPUTS, p, s01)
-#         h = st["h"]
-#         G1, a1, rho1 = st["G"], st["a"], st["d"]
-
-
-#         st = fluid2.get_state(jxp.PSmass_INPUTS, p, s02)
-#         # h = st["h"]
-#         G2, a2, rho2 = st["G"], st["a"], st["d"]
-
-#         alpha2 = 1 / (1 + ((1 - q_in) / q_in) * (rho1 / rho2))
-#         alpha1 = 1 - alpha2
-
-#         jax.debug.print("alpha1={alpha1}, alpha2={alpha2}",alpha1=alpha1, alpha2=alpha2)
-
-#         a_mix = get_speed_of_sound_mixture(G1, alpha1, a1, rho1, G2, alpha2, a2, rho2)
-#         jax.debug.print("a={a}", a=a_mix)
-#         return h01 - h - 0.5 * (Ma*a_mix)**2
-
-#     solver = optx.Bisection(rtol=1e-9, atol=1e-9)
-#     lower1, upper1 = 0.1 * p0, p0
-#     sol1 = optx.root_find(residual1, solver, y0=0.99 * p0, options={"lower": lower1, "upper": upper1})
-#     state1 = fluid1.get_state(jxp.PSmass_INPUTS, sol1.value, s01)
-#     state2 = fluid2.get_state(jxp.PSmass_INPUTS, sol1.value, s02)
-#     return state1, state2
+# -----------------------------------------------------------------------------------------
+# One component
+# -----------------------------------------------------------------------------------------
 
 
 # @eqx.filter_jit
@@ -270,22 +161,799 @@ def nozzle_homogeneuous_non_equilibrium(params_model, params_solver):
         root_finder=optx.Newton(rtol=1e-6, atol=1e-6),
     )
 
-    # # --- first solve (find domain end) ---
-    # saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)
+    # --- first solve (find domain end) ---
+    saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)
+    # saveat = dfx.SaveAt(dense = True, fn=eval_ode_full)
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=0.0,
+        t1=t1,
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        saveat=saveat,
+        event=event,
+        max_steps=200_000,
+        # throw=False,
+    )
+
+    # Relative error diagnostics
+    ts = jnp.linspace(sol.t0, sol.ts[0], 1000)
+
+    # Vectorize the first step: sol.evaluate(t) for all t in ts
+    evaluate_all = jax.vmap(sol.evaluate)
+    out2 = evaluate_all(ts)
+
+    # Vectorize the second step: apply the model to each (t, out)
+    model_all = jax.vmap(lambda t, y: eval_ode_full(t, y, params_model))
+    sol = model_all(ts, out2)
+
+    return sol
+
+
+# @eqx.filter_jit
+def nozzle_homogeneuous_non_equilibrium_mach_out_one_component(params_model, params_solver):
+    """
+    1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
+    State vector: y = [x, alpha1, alpha2, rho1, rho2, u, p, h1, h2].
+    """
+    
+    y_variable = compute_inlet_state_hne_one_component(params_model.p0_in,
+                                                    params_model.T01_in,
+                                                    params_model.T02_in,
+                                                    params_model.Ma_in,
+                                                    params_model.alpha1_in,
+                                                    params_model.alpha2_in,
+                                                    params_model.fluid1,
+                                                    params_model.fluid2,
+                                                    )
+
+    x_in = jnp.array([1e-9])  # start slightly after inlet
+    y0 = jnp.concatenate([x_in, y_variable])
+
+    # --- solver setup ---
+    t0, t1 = 1e-9, 1e9
+    solver = jxp.make_diffrax_solver(params_solver.solver_name)
+    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+    term = dfx.ODETerm(eval_ode_rhs_1c)
+    ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
+
+    event = dfx.Event(
+        cond_fn=eval_end_of_domain_event,
+        root_finder=optx.Newton(rtol=1e-6, atol=1e-6),
+    )
+
+    # --- first solve (find domain end) ---
+    # --- first solve (find domain end) ---
+    saveat = dfx.SaveAt(t1=True, fn=eval_ode_full_1c)
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=t1,
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        saveat=saveat,
+        event=event,
+        max_steps=200_000,
+        # throw=False,
+    )
+
+    lb = jnp.array(t0)
+    ub = jnp.array(sol.ts[0])
+
+    saveat = dfx.SaveAt(dense=True, t1=True, fn=eval_ode_full_1c)
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=sol.ts[0],
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        saveat=saveat,
+        event=event,
+        max_steps=200_000,
+        # throw=False,
+    )
+
+    x_end = sol.ys["x"]
+
+    # Optimization problem to find the max(Mach)
+        # Define the conditional branches
+    def true_fun(_):
+        # Case: det_end < 0, return the value as is
+        # return jnp.squeeze(det_end)
+        return jnp.asarray(1.1)
+
+    def false_fun(_):
+        # Case: det_end >= 0, we need to find the peak (choking point)
+        lb = t0
+        ub = sol.ts[0]
+        x0 = 0.5 * (lb + ub)
+        
+        # We want to minimize "D" over the trajectory saved in 'sol'
+        optimizer = optx.BFGS(rtol=1e-3, atol=1e-3)
+        # TODO: the solver crashes in finding the zero. but it also crasheh if the res are too low for the ode solver. it also creashes if the res of the minimizar are too high because it does not find a zero
+        # Run optimization
+        res = optx.minimise(
+            lambda t, *args: -nozzle_homogeneous_non_equilibrium_one_component_autonomous(
+                0.0, sol.evaluate(t), params_model
+            )["Ma_mix"],
+            optimizer,
+            y0=x0,  # A guess inside the bracket
+            throw=False
+        )
+
+        # Evaluate the physics at the optimized time
+        yy_max = sol.evaluate(res.value)
+        return nozzle_homogeneous_non_equilibrium_one_component_autonomous(0.0, yy_max, params_model)["Ma_mix"]
+
+    # Execute the branch and return
+    f_max = jax.lax.cond(jnp.squeeze(x_end < params_model.length*0.99999), true_fun, false_fun, operand=None)
+
+    return f_max
+
+
+
+
+# -----------------------------------------------------------------------------
+# Helper ODE evaluation functions
+# -----------------------------------------------------------------------------
+def eval_ode_full_1c(t, y, args):
+    return nozzle_homogeneous_non_equilibrium_one_component_autonomous(t, y, args)
+
+
+def eval_ode_rhs_1c(t, y, args):
+    return nozzle_homogeneous_non_equilibrium_one_component_autonomous(t, y, args)["rhs_autonomous"]
+
+
+def eval_ode_mach_1c(t, y, args):
+    return nozzle_homogeneous_non_equilibrium_one_component_autonomous(t, y, args)["Ma_mix"]
+
+
+
+@eqx.filter_jit
+def nozzle_homogeneuous_non_equilibrium_mach_out_one_component_lax_eight(params_model, params_solver):
+    """
+    1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
+    State vector: y = [x, alphav, rhov, rhol, u, p, hv, hl] (8-variable formulation).
+    Uses state-variable normalization (Y_ref) so the solver sees O(1) variables.
+    Returns (f_max, sol, Y_ref) where sol is the dense diffrax solution for postprocessing.
+    """
+
+    y_variable = compute_inlet_state_hne_one_component(params_model.p0_in,
+                                                    params_model.T01_in,
+                                                    params_model.T02_in,
+                                                    params_model.Ma_in,
+                                                    params_model.alpha1_in,
+                                                    params_model.alpha2_in,
+                                                    params_model.fluid1,
+                                                    params_model.fluid2,
+                                                    )
+
+    y_variable = jnp.concatenate([y_variable[:1], y_variable[2:]])
+    x_in = jnp.array([1e-9])  # start slightly after inlet
+    y0 = jnp.concatenate([x_in, y_variable])
+
+    # --- State-variable scaling ---
+    Y_ref = jnp.array([
+        params_model.length,  # x ~ L
+        1.0,                  # αv already O(1)
+        y0[2],                # ρv ~ initial vapor density
+        y0[3],                # ρl ~ initial liquid density
+        y0[4],                # u  ~ initial velocity
+        y0[5],                # p  ~ initial pressure
+        y0[6],                # hv ~ initial vapor enthalpy
+        y0[7],                # hl ~ initial liquid enthalpy
+    ])
+
+    y0_hat = y0 / Y_ref
+
+    # --- ODE wrappers with scaling ---
+    def ode_full(t, y, args):
+        """Evaluate full ODE output from scaled state."""
+        y_phys = y * Y_ref
+        return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(t, y_phys, args)
+
+    def ode_rhs(t, y, args):
+        """RHS in scaled coordinates: dY_hat/dτ = f(Y_hat * Y_ref) / Y_ref."""
+        out = ode_full(t, y, args)
+        return out["rhs_autonomous"] / Y_ref
+
+    def event_fn(t, y, args, **kwargs):
+        y_phys = y * Y_ref
+        x = y_phys[0]
+        L = args.length
+        out = nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(0.0, y_phys, args)
+        Ma_mix = jnp.min(out.get("Ma_mix"))
+        pmin = jnp.min(out.get("p"))
+        pmin_table = jnp.stack([args.fluid1.p_min, args.fluid2.p_min])
+        pmin_table = jnp.min(pmin_table)
+        M = 1.1 - Ma_mix
+        conditions = jnp.stack([x / L, 1 - x / L, M, pmin - pmin_table - 1])
+        return jnp.min(conditions)
+
+    # --- solver setup ---
+    t0, t1 = 1e-9, 1e9
+    solver = jxp.make_diffrax_solver(params_solver.solver_name)
+    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+    term = dfx.ODETerm(ode_rhs)
+    ctrl = dfx.PIDController(
+        rtol=params_solver.rtol,
+        atol=params_solver.atol,
+        dtmax=5e-2,      # hard cap on pseudo-time step size
+    )
+    event = dfx.Event(
+        cond_fn=event_fn,
+        root_finder=optx.Newton(rtol=1e-3, atol=1e-3),
+    )
+
+    # --- first solve (find domain end) ---
+    saveat = dfx.SaveAt(t1=True,dense=True, fn=ode_full)
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=t1,
+        dt0=1e-9,
+        y0=y0_hat,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        saveat=saveat,
+        event=event,
+        max_steps=100_000,
+        # throw=False,
+    )
+
+    # saveat = dfx.SaveAt(dense=True, t1=True, fn=ode_full)
     # sol = dfx.diffeqsolve(
     #     term,
     #     solver,
     #     t0=t0,
-    #     t1=t1,
+    #     t1=sol.ts[0],
     #     dt0=1e-9,
-    #     y0=y0,
+    #     y0=y0_hat,
     #     args=params_model,
     #     stepsize_controller=ctrl,
     #     adjoint=adjoint,
     #     saveat=saveat,
     #     event=event,
-    #     max_steps=200_000,
+    #     max_steps=500_000,
+    #     # throw=False,
     # )
+
+    # x_end = sol.ys["x"]
+    det_end = sol.ys["D"]
+
+    # Check if the solver stopped due to minimum pressure
+    yy_end = sol.evaluate(sol.ts[0]) * Y_ref
+    p_end = nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(
+        0.0, yy_end, params_model
+    )["p"]
+    pmin_table = jnp.minimum(params_model.fluid1.p_min, params_model.fluid2.p_min)
+    hit_pmin = jnp.squeeze(p_end <= pmin_table + 15)
+    # jax.debug.print("Pmin_solver:{pms}",pms=p_end)
+    # jax.debug.print("Pmin_table:{pmt}",pmt=pmin_table)
+    # jax.debug.print("P<pmin:{p}",p=hit_pmin)
+
+    # Optimization problem to find the max(Mach)
+    def true_fun(_):
+        return jnp.asarray(1.1)
+
+    def false_fun(_):
+        # Uniform-τ grid: the solver places more steps near the throat,
+        # so uniform τ gives denser coverage there where the Mach peak is sharp.
+        n_coarse = 200
+        ts_coarse = jnp.linspace(t0, sol.ts[0], n_coarse)
+
+        def mach_at_tau(t):
+            yy = sol.evaluate(t) * Y_ref
+            return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(
+                0.0, yy, params_model
+            )["Ma_mix"]
+
+        Ma_coarse = jax.vmap(mach_at_tau)(ts_coarse)
+
+        # BFGS in τ-space from every coarse seed
+        def neg_mach_of_tau(tau, _args=None):
+            yy = sol.evaluate(tau) * Y_ref
+            return -nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(
+                0.0, yy, params_model
+            )["Ma_mix"]
+
+        optimizer = optx.BFGS(rtol=1e-4, atol=1e-4)
+
+        def refine_seed(tau_seed):
+            res = optx.minimise(neg_mach_of_tau, optimizer, y0=tau_seed, throw=False)
+            return -neg_mach_of_tau(res.value)
+
+        Ma_refined = jax.vmap(refine_seed)(ts_coarse)
+
+        Ma_max = jnp.max(jnp.maximum(Ma_coarse, Ma_refined))
+        # jax.debug.print("Ma_coarse_max:{mc} | Ma_refined_max:{mr}", mc=jnp.max(Ma_coarse), mr=jnp.max(Ma_refined))
+        return Ma_max
+
+    # Execute the branch and return
+    f_max = jax.lax.cond(jnp.squeeze(det_end < 0) | hit_pmin, true_fun, false_fun, operand=None)
+
+    return f_max, sol, Y_ref
+
+    
+
+
+# -----------------------------------------------------------------------------
+# Helper ODE evaluation functions
+# -----------------------------------------------------------------------------
+def eval_ode_full_1c_8(t, y, args):
+    return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(t, y, args)
+
+
+def eval_ode_rhs_1c_8(t, y, args):
+    return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(t, y, args)["rhs_autonomous"]
+
+
+def eval_ode_mach_1c_8(t, y, args):
+    return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(t, y, args)["Ma_mix"]
+
+
+# -----------------------------------------------------------------------------
+# Determinant-based critical inlet solver
+# -----------------------------------------------------------------------------
+# @eqx.filter_jit
+def nozzle_det_at_outlet_one_component_lax_eight(params_model, params_solver):
+    """
+    Integrate the 8-variable HNEM ODE to the outlet and return the
+    determinant D at the end.  D > 0 means subsonic, D < 0 means supersonic.
+    The zero of D(Ma_in) is the critical inlet condition.
+    """
+    y_variable = compute_inlet_state_hne_one_component(
+        params_model.p0_in,
+        params_model.T01_in,
+        params_model.T02_in,
+        params_model.Ma_in,
+        params_model.alpha1_in,
+        params_model.alpha2_in,
+        params_model.fluid1,
+        params_model.fluid2,
+    )
+    y_variable = jnp.concatenate([y_variable[:1], y_variable[2:]])
+    x_in = jnp.array([1e-9])
+    y0 = jnp.concatenate([x_in, y_variable])
+
+    def ode_full(t, y, args):
+        return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(t, y, args)
+
+    def ode_rhs(t, y, args):
+        return ode_full(t, y, args)["rhs_autonomous"]
+
+    def event_fn(t, y, args, **kwargs):
+        x = y[0]
+        L = args.length
+        out = nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(0.0, y, args)
+        Ma_mix = jnp.min(out.get("Ma_mix"))
+        pmin = jnp.min(out.get("p"))
+        pmin_table = jnp.stack([args.fluid1.p_min, args.fluid2.p_min])
+        pmin_table = jnp.min(pmin_table)
+        M = 1.1 - Ma_mix
+        conditions = jnp.stack([x / L, 1 - x / L, M, pmin - pmin_table])
+        return jnp.min(conditions)
+
+    t0, t1 = 1e-9, 1e9
+    solver = jxp.make_diffrax_solver(params_solver.solver_name)
+    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+    term = dfx.ODETerm(ode_rhs)
+    ctrl = dfx.PIDController(
+        rtol=params_solver.rtol,
+        atol=params_solver.atol,
+        dtmax=5e-2,
+    )
+    event = dfx.Event(
+        cond_fn=event_fn,
+        root_finder=optx.Newton(rtol=1e-6, atol=1e-6),
+    )
+
+    saveat = dfx.SaveAt(t1=True, fn=ode_full)
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=t1,
+        dt0=1e-9,
+        y0=y0,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        saveat=saveat,
+        event=event,
+        max_steps=200_000,
+    )
+
+    return jnp.squeeze(sol.ys["D"])
+
+
+def nozzle_det_min_one_component_lax_eight(params_model, params_solver):
+    """
+    Integrate the HNEM ODE and return the minimum determinant D along the trajectory.
+
+    Uses the same scaled formulation as the mach_out function for numerical
+    conditioning.  The return value is:
+      - min(D) along the dense trajectory  if D at the end is >= 0
+      - -1.0                               if D at the end is <  0
+             (i.e. the solver crossed the sonic throat)
+
+    This makes D_min(Ma_in) a continuous function with a sign change at the
+    critical inlet condition, suitable for bisection.
+    """
+    y_variable = compute_inlet_state_hne_one_component(
+        params_model.p0_in,
+        params_model.T01_in,
+        params_model.T02_in,
+        params_model.Ma_in,
+        params_model.alpha1_in,
+        params_model.alpha2_in,
+        params_model.fluid1,
+        params_model.fluid2,
+    )
+    y_variable = jnp.concatenate([y_variable[:1], y_variable[2:]])
+    x_in = jnp.array([1e-9])
+    y0 = jnp.concatenate([x_in, y_variable])
+
+    Y_ref = jnp.array([
+        params_model.length,
+        1.0,
+        y0[2],
+        y0[3],
+        y0[4],
+        y0[5],
+        y0[6],
+        y0[7],
+    ])
+    y0_hat = y0 / Y_ref
+
+    def ode_full(t, y, args):
+        y_phys = y * Y_ref
+        return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(t, y_phys, args)
+
+    def ode_rhs(t, y, args):
+        out = ode_full(t, y, args)
+        return out["rhs_autonomous"] / Y_ref
+
+    def event_fn(t, y, args, **kwargs):
+        y_phys = y * Y_ref
+        x = y_phys[0]
+        L = args.length
+        out = nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(0.0, y_phys, args)
+        Ma_mix = jnp.min(out.get("Ma_mix"))
+        pmin = jnp.min(out.get("p"))
+        pmin_table = jnp.stack([args.fluid1.p_min, args.fluid2.p_min])
+        pmin_table = jnp.min(pmin_table)
+        M = 1.1 - Ma_mix
+        conditions = jnp.stack([x / L, 1 - x / L, M, pmin - pmin_table - 1])
+        return jnp.min(conditions)
+
+    t0, t1 = 1e-9, 1e9
+    solver = jxp.make_diffrax_solver(params_solver.solver_name)
+    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+    term = dfx.ODETerm(ode_rhs)
+    ctrl = dfx.PIDController(
+        rtol=params_solver.rtol,
+        atol=params_solver.atol,
+        dtmax=5e-2,
+    )
+    event = dfx.Event(
+        cond_fn=event_fn,
+        root_finder=optx.Newton(rtol=1e-3, atol=1e-3),
+    )
+
+    saveat = dfx.SaveAt(t1=True, dense=True, fn=ode_full)
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0=t0,
+        t1=t1,
+        dt0=1e-9,
+        y0=y0_hat,
+        args=params_model,
+        stepsize_controller=ctrl,
+        adjoint=adjoint,
+        saveat=saveat,
+        event=event,
+        max_steps=100_000,
+    )
+
+    det_end = jnp.squeeze(sol.ys["D"])
+
+    # Scan the dense solution on a uniform-τ grid to find the minimum D.
+    # Near the throat, dx/dτ → 0 so τ stretches out → uniform τ gives dense
+    # coverage exactly where D is smallest.
+    n_scan = 500
+    ts_scan = jnp.linspace(t0, sol.ts[0], n_scan)
+
+    def det_at_tau(t):
+        y_phys = sol.evaluate(t) * Y_ref
+        return nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(
+            0.0, y_phys, params_model
+        )["D"]
+
+    D_scan = jax.vmap(det_at_tau)(ts_scan)
+    D_min = jnp.min(D_scan)
+
+    # If the solver crossed the throat (det_end < 0) return the sentinel -1.
+    result = jnp.where(det_end < 0, jnp.asarray(-1.0), D_min)
+    jax.debug.print("Ma_in={M} | det_end={de} | det_min={dm}", M=params_model.Ma_in, de=det_end, dm=D_min)
+    return result
+
+
+def compute_critical_inlet_det_one_component_lax_eight(Ma_lower, Ma_upper, params_model, params_solver):
+    """
+    Finds the critical inlet Mach number using the minimum determinant along the
+    trajectory.  D_min > 0 (subsonic) → D_min < 0 or sentinel -1 (supersonic):
+    continuous sign change, no bifurcation jump.
+    """
+
+    def critical_det_residual(Mach_in, params_model):
+        pm_modified = replace_param(params_model, "Ma_in", Mach_in)
+        det = nozzle_det_min_one_component_lax_eight(pm_modified, params_solver)
+        return det
+
+    solver = optx.Bisection(rtol=1e-3, atol=1e-3)
+    x0_initial = Ma_lower
+
+    sol_root = optx.root_find(
+        critical_det_residual,
+        solver,
+        x0_initial,
+        args=params_model,
+        throw=True,
+        options={"lower": Ma_lower, "upper": Ma_upper},
+        max_steps=500,
+    )
+    Ma_crit = sol_root.value
+
+    return Ma_crit
+
+
+# -----------------------------------------------------------------------------
+# Mach-based critical inlet computation
+# -----------------------------------------------------------------------------
+# @eqx.filter_jit  # Don't JIT the bisection — inner mach_out function is already JIT-compiled
+def compute_critical_inlet_one_component_lax_eight(Ma_lower, Ma_upper, params_model, params_solver):
+    """
+    Finds the inlet Mach number that makes the flow reach Mach 1 using jaxprop.
+    Fully JAX-traceable (compatible with jit/tracers).
+    Returns the last subsonic Ma_in (Ma_max < 1) encountered during bisection.
+    """
+
+    jax.debug.print("Entering in the critical mach function")
+
+    # Mutable container to track the last subsonic Ma_in via side effect
+    last_subsonic_Ma = [None]
+
+    def store_subsonic(Ma_in, Ma_max):
+        """Called at each bisection step — stores Ma_in if subsonic."""
+        if float(Ma_max) < 1.0:
+            last_subsonic_Ma[0] = float(Ma_in)
+
+    def critical_det_residual(Mach_in, params_model):
+        # update model with candidate Mach
+        pm_modified = replace_param(params_model, "Ma_in", Mach_in)
+        Ma_max, _, _ = nozzle_homogeneuous_non_equilibrium_mach_out_one_component_lax_eight(
+            pm_modified, params_solver
+        )
+        jax.debug.print("Ma_in={M} | Ma_max={Ma_max}", Ma_max=Ma_max, M=Mach_in)
+        jax.debug.callback(store_subsonic, Mach_in, Ma_max)
+        return 1.0 - Ma_max
+
+    # Tight tolerances needed because the residual 1-Ma_max jumps sharply
+    # near the critical Ma_in (the system is extremely sensitive)
+    solver = optx.Bisection(rtol=1e-3, atol=2e-3)
+    x0_initial = Ma_lower
+
+    sol_root = optx.root_find(
+        critical_det_residual,
+        solver,
+        x0_initial,
+        args=params_model,
+        throw=False,
+        options={"lower": Ma_lower, "upper": Ma_upper},
+        max_steps=200,
+        # throw=False,
+    )
+
+    # Use the last subsonic Ma_in if available, otherwise fall back to bisection result
+    if last_subsonic_Ma[0] is not None:
+        Ma_crit = last_subsonic_Ma[0]
+        jax.debug.print("Using last subsonic Ma_in: {M}", M=Ma_crit)
+    else:
+        Ma_crit = sol_root.value
+        jax.debug.print("Warning: no subsonic solution found, using bisection result: {M}", M=Ma_crit)
+    # Ma_crit = sol_root.value # - solver.atol * 0.5
+
+    return Ma_crit
+
+
+def compute_critical_inlet_one_component(Ma_lower, Ma_upper, params_model, params_solver):
+    """
+    Finds the inlet Mach number that makes the flow reach Mach 1 using jaxprop.
+    Fully JAX-traceable (compatible with jit/tracers).
+    """
+    
+    def critical_det_residual(Mach_in, params_model):
+        # update model with candidate Mach
+        pm_modified = replace_param(params_model, "Ma_in", Mach_in)
+        Ma_max = nozzle_homogeneuous_non_equilibrium_mach_out_one_component(
+            pm_modified, params_solver
+        )
+        # max_mach = jnp.max(sol["Ma_mix"])
+        # x_final = sol["x"][-1]
+        # jax.debug.print("x={x} | M_in={M_in} | M_max={M}",x=x_final, M_in=Mach_in, M=max_mach,)
+        jax.debug.print("Ma_in={M} | Ma_max={Ma_max}",Ma_max=Ma_max, M=Mach_in)
+        return 1.0 - Ma_max**2
+
+    # Use JAX-safe Bisection
+    solver = optx.Bisection(rtol=1e-3, atol=1e-3)  # flip=True)
+    x0_initial = Ma_lower
+    # x0_initial = u_lower
+
+    # JAX-friendly root find (do not convert to float inside trace)
+    sol_root = optx.root_find(
+        critical_det_residual,
+        solver,
+        x0_initial,
+        args=params_model,
+        throw=True,
+        options={"lower": Ma_lower, "upper": Ma_upper},
+    )
+    Ma_crit = sol_root.value
+
+    return Ma_crit
+
+
+def eval_end_of_domain_event(t, y, args, **kwargs):
+    x = y[0]
+    L = args.length
+
+    # Determinant condition
+    out = nozzle_homogeneous_non_equilibrium_autonomous(0.0, y, args)
+    Ma_mix = jnp.min(out.get("Ma_mix"))
+
+    pmin = jnp.min(out.get("p"))
+    pmin_table = jnp.stack([args.fluid1.p_min, args.fluid2.p_min])
+    pmin_table = jnp.min(pmin_table)
+
+
+    M = 1.1 - Ma_mix
+    # jax.debug.print("x={x}, L-x={leng},M={D}",x=x, leng=L-x, D = out.get("Ma_mix"))
+    # M = 5
+    # jax.debug.print("Not considering mach as event")
+    # Stack all event conditions
+    # L = 0.15
+    conditions = jnp.stack([x / L, 1 - x / L, M,]) # pmin - pmin_table])  # D])
+    output = jnp.min(conditions)
+    # jax.debug.print("out={output}",output=output)
+    return output
+
+def eval_end_of_domain_event_8(t, y, args, **kwargs):
+    x = y[0]
+    L = args.length
+
+    # Determinant condition
+    out = nozzle_homogeneous_non_equilibrium_one_component_autonomous_lax_eigth(0.0, y, args)
+    Ma_mix = jnp.min(out.get("Ma_mix"))
+
+    pmin = jnp.min(out.get("p"))
+    pmin_table = jnp.stack([args.fluid1.p_min, args.fluid2.p_min])
+    pmin_table = jnp.min(pmin_table)
+
+
+    M = 1.1 - Ma_mix
+    # jax.debug.print("x={x}, L-x={leng},M={D}",x=x, leng=L-x, D = out.get("Ma_mix"))
+    # M = 5
+    # jax.debug.print("Not considering mach as event")
+    # Stack all event conditions
+    # L = 0.15
+    conditions = jnp.stack([x / L, 1 - x / L, M,pmin - pmin_table]) # pmin - pmin_table])  # D])
+    output = jnp.min(conditions)
+    # jax.debug.print("out={output}",output=output)
+    return output
+
+
+def eval_end_of_domain_event_classic(t, y, args, **kwargs):
+
+    L = args.length
+
+    x = t
+
+    # Determinant condition
+    out = nozzle_homogeneous_non_equilibrium_core(x, y, args)
+    Ma_mix = jnp.min(out.get("Ma_mix"))
+
+    M = 15.0 - Ma_mix
+    # jax.debug.print("x={x}, L-x={leng},M={D}",x=x, leng=L-x, D = out.get("Ma_mix"))
+    # M = 5
+    # jax.debug.print("Not considering mach as event")
+    # Stack all event conditions
+    # L = 0.15
+    conditions = jnp.stack([x / L, 1 - x / L, M])  # D])
+    output = jnp.min(conditions)
+    # jax.debug.print("out={output}",output=output)
+    return output
+
+
+    
+# @eqx.filter_jit
+def nozzle_homogeneuous_non_equilibrium(params_model, params_solver):
+    """
+    1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
+    State vector: y = [x, alpha1, alpha2, rho1, rho2, u, p, h1, h2].
+    """
+    # --- inlet state ---
+    # state1_in, state2_in = compute_static_state(
+    #     params_model.p0_in,
+    #     params_model.T01_in,
+    #     params_model.T02_in,
+    #     params_model.Ma_in,
+    #     params_model.mixture_ratio,
+    #     params_model.fluid1,
+    #     params_model.fluid2
+    # )
+
+    fluid1 = params_model.fluid1
+    fluid2 = params_model.fluid2
+
+    state1_in = fluid1.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T01_in)
+    state2_in = fluid2.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T02_in)
+
+    p_in, rho1_in, rho2_in, h1_in, h2_in = (
+        state1_in["p"],
+        state1_in["rho"],
+        state2_in["rho"],
+        state1_in["h"],
+        state2_in["h"],
+    )
+    q_in = (1) / (1 + params_model.mixture_ratio)
+    G1, a1 = state1_in["G"], state1_in["a"]
+    alpha2 = 1 / (1 + ((1 - q_in) / q_in) * (rho1_in / rho2_in))
+    alpha1 = 1 - alpha2
+
+    # h = st["h"]
+    G2, a2 = state2_in["G"], state2_in["a"]
+
+    a_in_mix = get_speed_of_sound_mixture(
+        G1, alpha1, a1, rho1_in, G2, alpha2, a2, rho2_in
+    )
+
+    u_in = params_model.Ma_in * a_in_mix
+    q_in = (1) / (1 + params_model.mixture_ratio)
+    alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
+    alpha1_in = 1 - alpha2_in
+
+    x_in = 1e-9  # start slightly after inlet
+    y0 = jnp.array(
+        [x_in, alpha1_in, alpha2_in, rho1_in, rho2_in, u_in, p_in, h1_in, h2_in]
+    )
+
+    # --- solver setup ---
+    t0, t1 = 1e-9, 1e9
+    solver = jxp.make_diffrax_solver(params_solver.solver_name)
+    adjoint = jxp.make_diffrax_adjoint(params_solver.adjoint_name)
+    term = dfx.ODETerm(eval_ode_rhs)
+    ctrl = dfx.PIDController(rtol=params_solver.rtol, atol=params_solver.atol)
+
+    event = dfx.Event(
+        cond_fn=eval_end_of_domain_event,
+        root_finder=optx.Newton(rtol=1e-6, atol=1e-6),
+    )
 
     # --- first solve (find domain end) ---
     saveat = dfx.SaveAt(t1=True, dense=True, fn=eval_ode_full)
@@ -320,57 +988,22 @@ def nozzle_homogeneuous_non_equilibrium(params_model, params_solver):
     return sol
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def nozzle_homogeneuous_non_equilibrium_mach_out(params_model, params_solver):
     """
     1D variable-area nozzle with friction and optional heat transfer (Reynolds analogy).
     State vector: y = [x, alpha1, alpha2, rho1, rho2, u, p, h1, h2].
     """
-    # --- inlet state ---
-    # state1_in, state2_in = compute_static_state(
-    #     params_model.p0_in,
-    #     params_model.T01_in,
-    #     params_model.T02_in,
-    #     params_model.Ma_in,
-    #     params_model.mixture_ratio,
-    #     params_model.fluid1,
-    #     params_model.fluid2
-    # )
+    y_variable = compute_inlet_state_hne(params_model.p0_in,
+                                                    params_model.T01_in,
+                                                    params_model.T02_in,
+                                                    params_model.Ma_in,
+                                                    params_model.mixture_ratio,
+                                                    params_model.fluid1,
+                                                    params_model.fluid2,
+                                                    params_model.mixture_ratio,
+                                                    )
 
-    # fluid1 = params_model.fluid1
-    # fluid2 = params_model.fluid2
-
-    # state1_in = fluid1.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T01_in)
-    # state2_in = fluid2.get_state(jxp.PT_INPUTS, params_model.p0_in, params_model.T02_in)
-
-    # p_in, rho1_in, rho2_in, h1_in, h2_in = (
-    #     state1_in["p"],
-    #     state1_in["rho"],
-    #     state2_in["rho"],
-    #     state1_in["h"],
-    #     state2_in["h"]
-    # )
-    # q_in = (1)/(1 + params_model.mixture_ratio)
-    # G1, a1 = state1_in["G"], state1_in["a"]
-    # alpha2_in = 1 / (1 + ((1 - q_in) / q_in) * (rho2_in / rho1_in))
-    # alpha1_in = 1 - alpha2_in
-
-    # # h = st["h"]
-    # G2, a2 = state2_in["G"], state2_in["a"]
-
-    # a_in_mix = get_speed_of_sound_mixture(G1, alpha1_in, a1, rho1_in, G2, alpha2_in, a2, rho2_in)
-
-    # u_in = params_model.Ma_in * a_in_mix
-    y_variable = compute_inlet_state_hne(
-        params_model.p0_in,
-        params_model.T01_in,
-        params_model.T02_in,
-        params_model.Ma_in,
-        params_model.mixture_ratio,
-        params_model.fluid1,
-        params_model.fluid2,
-        params_model.mixture_ratio,
-    )
 
     x_in = jnp.array([1e-9])  # start slightly after inlet
     y0 = jnp.concatenate([x_in, y_variable])
@@ -403,13 +1036,10 @@ def nozzle_homogeneuous_non_equilibrium_mach_out(params_model, params_solver):
         saveat=saveat,
         event=event,
         max_steps=200_000,
-        # throw=False,
+        throw=False,
     )
 
-    lb = jnp.array(t0)
-    ub = jnp.array(sol.ts[0])
-
-    saveat = dfx.SaveAt(dense=True, fn=eval_ode_full)
+    saveat = dfx.SaveAt(dense=True, t1=True, fn=eval_ode_full)
     sol = dfx.diffeqsolve(
         term,
         solver,
@@ -420,81 +1050,60 @@ def nozzle_homogeneuous_non_equilibrium_mach_out(params_model, params_solver):
         args=params_model,
         stepsize_controller=ctrl,
         adjoint=adjoint,
-        saveat=dfx.SaveAt(dense=True),
+        saveat=saveat,
         event=event,
-        max_steps=200_000,
-        # throw=False,
+        max_steps=500_000,
+        throw=False,
     )
 
-    # fa = sol.evaluate(1e-2)
-    # jax.debug.print("fa={fa}",fa=fa)
+    det_end = sol.ys["D"]
 
-    # f_nested = sol.evaluate()
-    # f = lambda t: nozzle_homogeneous_non_equilibrium_autonomous(0.0, sol.evaluate(t), params_model)["Ma_mix"]
+    def true_fun(_):
+        return jnp.asarray(1.1)
 
-    # def f(t, lb, ub):
-    #     jax.debug.print("t={t}", t=t)
-    #     t = jnp.clip(t, lb, ub)
-    #     return nozzle_homogeneous_non_equilibrium_autonomous(0.0, sol.evaluate(t), params_model)["Ma_mix"]
-    # def f_neasted(t):
-    #     jax.debug.print("t={t}", t=t)
-    #     return sol.evaluate(t)
+    def false_fun(_):
+        # Build x(τ) mapping on a fine grid
+        n_fine = 1_000
+        ts_fine = jnp.linspace(t0, sol.ts[0], n_fine)
+        x_of_tau = jax.vmap(lambda t: sol.evaluate(t)[0])(ts_fine)
 
-    # def f(t):
-    #     yy = f_neasted(t)
-    #     jax.debug.print("t={t}", t=t)
-    #     return nozzle_homogeneous_non_equilibrium_autonomous(0.0, yy, params_model)["Ma_mix"]
+        # Grid search: evaluate Ma at all τ-grid points
+        def mach_at_tau(t):
+            yy = sol.evaluate(t)
+            return nozzle_homogeneous_non_equilibrium_autonomous(
+                0.0, yy, params_model
+            )["Ma_mix"]
 
-    ts = jnp.linspace(lb, ub, 100)
-    kappa_yy = jax.vmap(lambda t: sol.evaluate(t))
-    yy = kappa_yy(ts)
-    f_max = jax.vmap(
-        lambda y, *args: nozzle_homogeneous_non_equilibrium_autonomous(
-            0.0, y, params_model
+        Ma_grid = jax.vmap(mach_at_tau)(ts_fine)
+        i_max = jnp.argmax(Ma_grid)
+        Ma_grid_max = Ma_grid[i_max]
+        x_grid_max = x_of_tau[i_max]
+
+        # Refine with BFGS in x-space
+        def neg_mach_of_x(x_query, _args=None):
+            tau_query = jnp.interp(x_query, x_of_tau, ts_fine)
+            yy = sol.evaluate(tau_query)
+            return -nozzle_homogeneous_non_equilibrium_autonomous(
+                0.0, yy, params_model
+            )["Ma_mix"]
+
+        optimizer = optx.BFGS(rtol=1e-3, atol=1e-3)
+        res = optx.minimise(neg_mach_of_x, optimizer, y0=x_grid_max, throw=False)
+        Ma_opt = -neg_mach_of_x(res.value)
+
+        # Also check outlet Mach
+        yy_end = sol.evaluate(sol.ts[0])
+        Ma_end = nozzle_homogeneous_non_equilibrium_autonomous(
+            0.0, yy_end, params_model
         )["Ma_mix"]
-    )
-    kappa = f_max(yy)
-    kappa = jnp.max(kappa)
-    # jax.debug.print("{f}", f=kappa)
 
-    # # Define objective for optimistix
-    # def objective(x, args):
-    #     lb, ub = args
-    #     t = jnp.clip(x, lb, ub)
-    #     return -f(t)
+        Ma_max = jnp.maximum(jnp.maximum(Ma_opt, Ma_end), Ma_grid_max)
+        # jax.debug.print("Ma_grid_max:{mg} | Ma_opt:{mp} | Ma_end:{me}", mg=Ma_grid_max, mp=Ma_opt, me=Ma_end)
+        return Ma_max
 
-    # Initial guess
-    x0 = jnp.array(0.5 * (lb + ub))
+    f_max = jax.lax.cond(jnp.squeeze(det_end < 0), true_fun, false_fun, operand=None)
 
-    # Use a stable optimizer
-    solver = optx.BFGS(rtol=1e-6, atol=1e-6)
-
-    # Run optimization
-    # sol = optx.minimise(lambda t:nozzle_homogeneous_non_equilibrium_autonomous(0.0, sol.evaluate(t), params_model)["Ma_mix"], solver, y0=x0) # , args=(lb, ub))
-    res = optx.minimise(
-        lambda t, *args: -nozzle_homogeneous_non_equilibrium_autonomous(
-            0.0, sol.evaluate(t), params_model
-        )["Ma_mix"],
-        solver,
-        y0=x0,
-    )
-
-    t_max = res.value
-    yy_max = sol.evaluate(t_max)
-    f_max = nozzle_homogeneous_non_equilibrium_autonomous(0.0, yy_max, params_model)[
-        "Ma_mix"
-    ]
-    kappa = jnp.max(kappa)
-    throat_position_elliot = 141.63e-3
-    x_max = nozzle_homogeneous_non_equilibrium_autonomous(0.0, yy_max, params_model)[
-        "x"
-    ]
-    condition = x_max > throat_position_elliot
-    # jax.debug.print("max_opt={fopt} | max_guess={f} | delta_mach={df}",df=f_max - kappa, fopt=f_max, f=kappa)
-    # jax.debug.print("M_max={fopt} | max in divergent={f}", fopt=f_max, f=condition)
-
-    return f_max
-    # return fa
+    return f_max, sol
 
 
 # -----------------------------------------------------------------------------
@@ -524,14 +1133,20 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
     def critical_mach_residual(Mach_in, params_model):
         # update model with candidate Mach
         pm_modified = replace_param(params_model, "Ma_in", Mach_in)
-        max_mach = nozzle_homogeneuous_non_equilibrium_mach_out(
+        max_mach, _ = nozzle_homogeneuous_non_equilibrium_mach_out(
             pm_modified, params_solver
         )
-        # max_mach = jnp.max(sol["Ma_mix"])
-        # x_final = sol["x"][-1]
-        # jax.debug.print("x={x} | M_in={M_in} | M_max={M}",x=x_final, M_in=Mach_in, M=max_mach,)
-        # jax.debug.print("Ma_max={M}", M=max_mach)
+        jax.debug.print("Ma_in:{Mi} |Ma_max:{Mm}", Mi= Mach_in, Mm=max_mach)
         return 1.0 - max_mach
+
+    def critical_det_residual_det(Mach_in, params_model):
+        # update model with candidate Mach
+        pm_modified = replace_param(params_model, "Ma_in", Mach_in)
+        f_min, _ = nozzle_homogeneuous_non_equilibrium_mach_out(
+            pm_modified, params_solver
+        )
+        jax.debug.print("Ma_in={M} | det={det}",det=f_min, M=Mach_in)
+        return f_min
 
     # Use JAX-safe Bisection
     solver = optx.Bisection(rtol=1e-3, atol=1e-3)  # flip=True)
@@ -544,10 +1159,12 @@ def compute_critical_inlet(Ma_lower, Ma_upper, params_model, params_solver):
         solver,
         x0_initial,
         args=params_model,
-        throw=True,
+        throw=False,
+        max_steps=300,
         options={"lower": Ma_lower, "upper": Ma_upper},
     )
     Ma_crit = sol_root.value
+    
 
     return Ma_crit
 
@@ -560,7 +1177,7 @@ def eval_end_of_domain_event(t, y, args, **kwargs):
     out = nozzle_homogeneous_non_equilibrium_autonomous(0.0, y, args)
     Ma_mix = jnp.min(out.get("Ma_mix"))
 
-    M = 15.0 - Ma_mix
+    M = 1.1 - Ma_mix
     # jax.debug.print("x={x}, L-x={leng},M={D}",x=x, leng=L-x, D = out.get("Ma_mix"))
     # M = 5
     # jax.debug.print("Not considering mach as event")
