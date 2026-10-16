@@ -1,0 +1,23 @@
+c:\Users\alber\projects\nozzlex\case_study\elliot_1979\test_pipe.py:271: UserWarning: A JAX array is being set as static! This can result in unexpected behavior and is usually a mistake to do.
+  fluid1 = jxp.FLoaded propertc:\Users\alber\projects\nozzlex\case_study\elliot
+=== INLET DIAGNOSTICS ===
+  alpha1        = 0.609395  |  alpha2      = 0.390605
+  rho1          = 998.6358 kg/m³  |  rho2   = 22.9119 kg/m³
+  u1            = 4.0000 m/s  |  u2          = 4.0000 m/s
+  p             = 2000000.00 Pa
+  h1            = 94147.71 J/kg  |  h2          = 301879.53 J/kg
+  T1            = 295.15 K  |  T2          = 295.15 K
+  a1            = 1491.48 m/s  |  a2          = 353.49 m/s
+  G1 (Gruneisen)= 0.1225  |  G2          = 0.4143
+  mu1           = 9.5396e-04 Pa·s  |  mu2      = 1.7949e-05 Pa·s
+  u_rel         = 0.0000 m/s
+  det(A)        = 4.420308e-08
+  det_ref       = 4.420308e-08
+  rhs_autonomous= [1.0, 4.22899578296746e-18, -4.228995782969588e-18, -7.557765455185345e-17, 7.102674996818795e-15, -2.7455906483914626e-17, -1.196693059990265e-15, 1.0967380897925708e-13, 1.3748890422843259e-12, -9.348020009653098e-11]
+  b_vec         = [0.0, -0.0, -0.0, -0.0, 0.0, 3.3465653706604448e-09, -3.3465653706604448e-09, 0.0, 0.0]
+  A_mat row norms = [1.4142135623730951, 4040.635213663036, 92.09658169204727, 2434.2566647118338, 35.8000219610404, 10036.697033966384, 147.59848579362327, 1.0000000015131913, 1.000000002949566]
+  rhs_scaled    = [1.0, 4.22899578296746e-18, -4.228995782969588e-18, -7.56808953736134e-20, 3.1000006127770765e-16, -6.863976620978657e-18, -2.9917326499756626e-16, 5.483690448962853e-20, 1.4603531381624396e-17, -3.0966060757845974e-16]
+  Y_ref         = [1.0, 1.0, 1.0, 998.6358403762233, 22.91185029946171, 4.0, 4.0, 2000000.0, 94147.71032808865, 301879.5345896413]
+=========================
+
+Solver result: diffrax._solution.RESULTS<The maximum number of solver steps was reached. Try increasing `max_steps`.> | steps: 100 | time: 5948 ms

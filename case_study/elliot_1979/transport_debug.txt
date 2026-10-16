@@ -1,0 +1,20 @@
+c:\Users\alber\projects\nozzlex\case_study\elliot_1979\diffrLoaded property table from: fluid_tables\nitrogen_130x130.pkl
+
+------------------------------------------------------------
+Evaluating transonic solution
+------------------------------------------------------------
+alpha1:0.6365890590354819 |  alpha2:0.3634109409645181
+col_scales: [2.99590752e+03 1.08729910e+05 1.90976718e+00 1.22410451e+00
+ 5.72148585e+03 9.44711409e+01 6.36589059e-01 1.90716195e+03
+ 2.80464993e+01 1.00000000e+00 1.00000000e+00]
+row_scales: [3.33788674e-04 1.00000000e+00 1.00000000e+00 1.00000000e+00
+ 5.70872113e-01 1.00000000e+00 1.00000000e+00 5.23624038e-01
+ 8.16923712e-01 1.00000000e+00 1.00000000e+00]
+
+--- Solver stats ---
+  result: diffrax._solution.RESULTS<Terminating differential equation solve because an event occurred.>
+  τ_end = 4.810693e-02
+  num_steps = 3400
+  num_accepted = 3228
+  num_rejected = 172
+Solution 0 | Solver status diffrax._solution.RESULTS<Terminating differential equation solve because an event occurred.> | steps 3400 | mdot error 3.25e-07 | h01 error 1.22e-02 | s_error 1.40e-03 | time 69519.90 ms

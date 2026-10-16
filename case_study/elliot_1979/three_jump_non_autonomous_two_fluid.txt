@@ -1,0 +1,7 @@
+c:\Users\alber\projects\nozzlex\case_study\elliot_1979\diffrLoaded property table from: fluid_tables\nitrogen_145x145.pkl
+
+------------------------------------------------------------
+Evaluating transonic solution
+------------------------------------------------------------
+ber\projects\nozzlex\case_study\elliot_1979\diffrax_nozzle_two_fluid_transport_jump_elliot_big_short.py:533: UserWarning: A JAX array is being set as static! This can result in unexpected behavior and is usually a mistake to do.
+  fluid2=jxp.FluidBicubic(
