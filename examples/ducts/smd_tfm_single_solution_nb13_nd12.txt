@@ -1,0 +1,1060 @@
+C:\Users\alber\projects\nozzlex\examples\ducts\diffrax_nozzle_tfm_sinlgeLoaded property table from: fluid_tables\water_meta_vapor_150x150.pkl
+
+------------------------------------------------------------
+Evaluating transonic solution (two-pass + Kvaerno5)
+------------------------------------------------------------
+NozzleParams(
+  fluid1=FluidBicubic(
+    fluid_name='water',
+    backend='HEOS',
+    h_min=2200000.0,
+    h_max=3400000.0,
+    p_min=50000.0,
+    p_max=13000000.0,C:\Users\alber\projects\nozzlex\examples\ducts\diffrax_nozzle_tfm_sinlge_solution.py:841: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+  plt.show()
+   h_vals=f64[150],
+    logP_vals=f64[150],
+    logP_sat_vals=f64[150],
+    table_name='water_meta_vapor_150x150',
+    table_dir='fluid_tables',
+    table={
+      'metadata':
+      {
+        'fluid': 'water',
+        'backend': 'HEOS',
+        'h_min': 2200000.0,
+        'h_max': 3400000.0,
+        'p_min': 50000.0,
+        'p_max': 13000000.0,
+        'N_h': 150,
+        'N_p': 150,
+        'delta_h': 8053.691275167745,
+        'delta_logP': 0.03732001094641291,
+        'metastable_phase': 'vapor'
+      },
+      'pressure':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'temperature':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'density':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'enthalpy':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'entropy':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'internal_energy':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'compressibility_factor':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isobaric_heat_capacity':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isochoric_heat_capacity':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'heat_capacity_ratio':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'speed_of_sound':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isothermal_compressibility':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isentropic_compressibility':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isothermal_bulk_modulus':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isentropic_bulk_modulus':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isobaric_expansion_coefficient':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'isothermal_joule_thomson':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'joule_thomson':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'gruneisen':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'viscosity':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'conductivity':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'is_two_phase':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'quality_mass':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'quality_volume':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'surface_tension':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'subcooling':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'superheating':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'pressure_saturation':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'temperature_saturation':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'supersaturation_degree':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'supersaturation_ratio':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'mixture_ratio':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'mass_frac_1':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'mass_frac_2':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'vol_frac_1':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'vol_frac_2':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'drho_dp':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'drho_dh':
+      {
+        'value': f64[150,150],
+        'grad_h': f64[150,150],
+        'grad_p': f64[150,150],
+        'grad_logP': f64[150,150],
+        'grad_ph': f64[150,150],
+        'grad_hlogP': f64[150,150],
+        'coeffs': f64[149,149,16]
+      },
+      'saturation_props':
+      {
+        'pressure': {'value': f64[150], 'grad_p': f64[150]},
+        'temperature': {'value': f64[150], 'grad_p': f64[150]},
+        'density': {'value': f64[150], 'grad_p': f64[150]},
+        'enthalpy': {'value': f64[150], 'grad_p': f64[150]},
+        'entropy': {'value': f64[150], 'grad_p': f64[150]},
+        'internal_energy': {'value': f64[150], 'grad_p': f64[150]},
+        'compressibility_factor': {'value': f64[150], 'grad_p': f64[150]},
+        'isobaric_heat_capacity': {'value': f64[150], 'grad_p': f64[150]},
+        'isochoric_heat_capacity': {'value': f64[150], 'grad_p': f64[150]},
+        'heat_capacity_ratio': {'value': f64[150], 'grad_p': f64[150]},
+        'speed_of_sound': {'value': f64[150], 'grad_p': f64[150]},
+        'isothermal_compressibility': {'value': f64[150], 'grad_p': f64[150]},
+        'isentropic_compressibility': {'value': f64[150], 'grad_p': f64[150]},
+        'isothermal_bulk_modulus': {'value': f64[150], 'grad_p': f64[150]},
+        'isentropic_bulk_modulus': {'value': f64[150], 'grad_p': f64[150]},
+        'isobaric_expansion_coefficient':
+        {'value': f64[150], 'grad_p': f64[150]},
+        'isothermal_joule_thomson': {'value': f64[150], 'grad_p': f64[150]},
+        'joule_thomson': {'value': f64[150], 'grad_p': f64[150]},
+        'gruneisen': {'value': f64[150], 'grad_p': f64[150]},
+        'viscosity': {'value': f64[150], 'grad_p': f64[150]},
+        'conductivity': {'value': f64[150], 'grad_p': f64[150]},
+        'is_two_phase': {'value': f64[150], 'grad_p': f64[150]},
+        'quality_mass': {'value': f64[150], 'grad_p': f64[150]},
+        'quality_volume': {'value': f64[150], 'grad_p': f64[150]},
+        'surface_tension': {'value': f64[150], 'grad_p': f64[150]},
+        'subcooling': {'value': f64[150], 'grad_p': f64[150]},
+        'superheating': {'value': f64[150], 'grad_p': f64[150]},
+        'pressure_saturation': {'value': f64[150], 'grad_p': f64[150]},
+        'temperature_saturation': {'value': f64[150], 'grad_p': f64[150]},
+        'supersaturation_degree': {'value': f64[150], 'grad_p': f64[150]},
+        'supersaturation_ratio': {'value': f64[150], 'grad_p': f64[150]},
+        'mixture_ratio': {'value': f64[150], 'grad_p': f64[150]},
+        'mass_frac_1': {'value': f64[150], 'grad_p': f64[150]},
+        'mass_frac_2': {'value': f64[150], 'grad_p': f64[150]},
+        'vol_frac_1': {'value': f64[150], 'grad_p': f64[150]},
+        'vol_frac_2': {'value': f64[150], 'grad_p': f64[150]},
+        'drho_dp': {'value': f64[150], 'grad_p': f64[150]},
+        'drho_dh': {'value': f64[150], 'grad_p': f64[150]}
+      }
+    },
+    identifier='water',
+    grad_method='forward',
+    metadata={
+      'fluid': 'water',
+      'backend': 'HEOS',
+      'h_min': 2200000.0,
+      'h_max': 3400000.0,
+      'p_min': 50000.0,
+      'p_max': 13000000.0,
+      'N_h': 150,
+      'N_p': 150,
+      'delta_h': 8053.691275167745,
+      'delta_logP': 0.03732001094641291,
+      'metastable_phase': 'vapor'
+    },
+    mixture_ratio=None,
+    metastable_phase='vapor',
+    critical_point=FluidState(
+      fluid_name='water',
+      identifier='water',
+      pressure=f64[](numpy),
+      temperature=f64[](numpy),
+      density=f64[](numpy),
+      enthalpy=f64[](numpy),
+      entropy=f64[](numpy),
+      internal_energy=f64[](numpy),
+      compressibility_factor=f64[](numpy),
+      isobaric_heat_capacity=f64[](numpy),
+      isochoric_heat_capacity=f64[](numpy),
+      heat_capacity_ratio=f64[](numpy),
+      speed_of_sound=f64[](numpy),
+      isothermal_compressibility=f64[](numpy),
+      isentropic_compressibility=f64[](numpy),
+      isothermal_bulk_modulus=f64[](numpy),
+      isentropic_bulk_modulus=f64[](numpy),
+      isobaric_expansion_coefficient=f64[](numpy),
+      isothermal_joule_thomson=f64[](numpy),
+      joule_thomson=f64[](numpy),
+      gruneisen=f64[](numpy),
+      viscosity=f64[](numpy),
+      conductivity=f64[](numpy),
+      is_two_phase=f64[](numpy),
+      quality_mass=f64[](numpy),
+      quality_volume=f64[](numpy),
+      surface_tension=f64[](numpy),
+      subcooling=f64[](numpy),
+      superheating=f64[](numpy),
+      pressure_saturation=f64[](numpy),
+      temperature_saturation=f64[](numpy),
+      supersaturation_degree=f64[](numpy),
+      supersaturation_ratio=f64[](numpy),
+      mixture_ratio=f64[](numpy),
+      mass_frac_1=f64[](numpy),
+      mass_frac_2=f64[](numpy),
+      vol_frac_1=f64[](numpy),
+      vol_frac_2=f64[](numpy),
+      drho_dp=f64[](numpy),
+      drho_dh=f64[](numpy)
+    )
+  ),
+  fluid2=FluidBicubic(
+    fluid_name='water',
+    backend='HEOS',
+    h_min=300000.0,
+    h_max=1800000.0,
+    p_min=100000.0,
+    p_max=13000000.0,
+    N_h=120,
+    N_p=120,
+    N_p_sat=150,
+    coarse_step=10,
+    delta_h=12605.042016806721,
+    delta_logP=0.040903650844164474,
+    delta_logP_sat=0.03608274889665708,
+    h_vals=f64[120],
+    logP_vals=f64[120],
+    logP_sat_vals=f64[150],
+    table_name='water_meta_liquid_120x120',
+    table_dir='fluid_tables',
+    table={
+      'metadata':
+      {
+        'fluid': 'water',
+        'backend': 'HEOS',
+        'h_min': 300000.0,
+        'h_max': 1800000.0,
+        'p_min': 100000.0,
+        'p_max': 13000000.0,
+        'N_h': 120,
+        'N_p': 120,
+        'delta_h': 12605.042016806721,
+        'delta_logP': 0.040903650844164474,
+        'metastable_phase': 'liquid'
+      },
+      'pressure':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'temperature':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'density':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'enthalpy':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'entropy':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'internal_energy':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'compressibility_factor':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isobaric_heat_capacity':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isochoric_heat_capacity':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'heat_capacity_ratio':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'speed_of_sound':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isothermal_compressibility':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isentropic_compressibility':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isothermal_bulk_modulus':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isentropic_bulk_modulus':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isobaric_expansion_coefficient':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'isothermal_joule_thomson':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'joule_thomson':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'gruneisen':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'viscosity':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'conductivity':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'is_two_phase':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'quality_mass':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'quality_volume':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'surface_tension':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'subcooling':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'superheating':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'pressure_saturation':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'temperature_saturation':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'supersaturation_degree':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'supersaturation_ratio':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'mixture_ratio':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'mass_frac_1':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'mass_frac_2':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'vol_frac_1':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'vol_frac_2':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'drho_dp':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'drho_dh':
+      {
+        'value': f64[120,120],
+        'grad_h': f64[120,120],
+        'grad_p': f64[120,120],
+        'grad_logP': f64[120,120],
+        'grad_ph': f64[120,120],
+        'grad_hlogP': f64[120,120],
+        'coeffs': f64[119,119,16]
+      },
+      'saturation_props':
+      {
+        'pressure': {'value': f64[150], 'grad_p': f64[150]},
+        'temperature': {'value': f64[150], 'grad_p': f64[150]},
+        'density': {'value': f64[150], 'grad_p': f64[150]},
+        'enthalpy': {'value': f64[150], 'grad_p': f64[150]},
+        'entropy': {'value': f64[150], 'grad_p': f64[150]},
+        'internal_energy': {'value': f64[150], 'grad_p': f64[150]},
+        'compressibility_factor': {'value': f64[150], 'grad_p': f64[150]},
+        'isobaric_heat_capacity': {'value': f64[150], 'grad_p': f64[150]},
+        'isochoric_heat_capacity': {'value': f64[150], 'grad_p': f64[150]},
+        'heat_capacity_ratio': {'value': f64[150], 'grad_p': f64[150]},
+        'speed_of_sound': {'value': f64[150], 'grad_p': f64[150]},
+        'isothermal_compressibility': {'value': f64[150], 'grad_p': f64[150]},
+        'isentropic_compressibility': {'value': f64[150], 'grad_p': f64[150]},
+        'isothermal_bulk_modulus': {'value': f64[150], 'grad_p': f64[150]},
+        'isentropic_bulk_modulus': {'value': f64[150], 'grad_p': f64[150]},
+        'isobaric_expansion_coefficient':
+        {'value': f64[150], 'grad_p': f64[150]},
+        'isothermal_joule_thomson': {'value': f64[150], 'grad_p': f64[150]},
+        'joule_thomson': {'value': f64[150], 'grad_p': f64[150]},
+        'gruneisen': {'value': f64[150], 'grad_p': f64[150]},
+        'viscosity': {'value': f64[150], 'grad_p': f64[150]},
+        'conductivity': {'value': f64[150], 'grad_p': f64[150]},
+        'is_two_phase': {'value': f64[150], 'grad_p': f64[150]},
+        'quality_mass': {'value': f64[150], 'grad_p': f64[150]},
+        'quality_volume': {'value': f64[150], 'grad_p': f64[150]},
+        'surface_tension': {'value': f64[150], 'grad_p': f64[150]},
+        'subcooling': {'value': f64[150], 'grad_p': f64[150]},
+        'superheating': {'value': f64[150], 'grad_p': f64[150]},
+        'pressure_saturation': {'value': f64[150], 'grad_p': f64[150]},
+        'temperature_saturation': {'value': f64[150], 'grad_p': f64[150]},
+        'supersaturation_degree': {'value': f64[150], 'grad_p': f64[150]},
+        'supersaturation_ratio': {'value': f64[150], 'grad_p': f64[150]},
+        'mixture_ratio': {'value': f64[150], 'grad_p': f64[150]},
+        'mass_frac_1': {'value': f64[150], 'grad_p': f64[150]},
+        'mass_frac_2': {'value': f64[150], 'grad_p': f64[150]},
+        'vol_frac_1': {'value': f64[150], 'grad_p': f64[150]},
+        'vol_frac_2': {'value': f64[150], 'grad_p': f64[150]},
+        'drho_dp': {'value': f64[150], 'grad_p': f64[150]},
+        'drho_dh': {'value': f64[150], 'grad_p': f64[150]}
+      }
+    },
+    identifier='water',
+    grad_method='forward',
+    metadata={
+      'fluid': 'water',
+      'backend': 'HEOS',
+      'h_min': 300000.0,
+      'h_max': 1800000.0,
+      'p_min': 100000.0,
+      'p_max': 13000000.0,
+      'N_h': 120,
+      'N_p': 120,
+      'delta_h': 12605.042016806721,
+      'delta_logP': 0.040903650844164474,
+      'metastable_phase': 'liquid'
+    },
+    mixture_ratio=None,
+    metastable_phase='liquid',
+    critical_point=FluidState(
+      fluid_name='water',
+      identifier='water',
+      pressure=f64[](numpy),
+      temperature=f64[](numpy),
+      density=f64[](numpy),
+      enthalpy=f64[](numpy),
+      entropy=f64[](numpy),
+      internal_energy=f64[](numpy),
+      compressibility_factor=f64[](numpy),
+      isobaric_heat_capacity=f64[](numpy),
+      isochoric_heat_capacity=f64[](numpy),
+      heat_capacity_ratio=f64[](numpy),
+      speed_of_sound=f64[](numpy),
+      isothermal_compressibility=f64[](numpy),
+      isentropic_compressibility=f64[](numpy),
+      isothermal_bulk_modulus=f64[](numpy),
+      isentropic_bulk_modulus=f64[](numpy),
+      isobaric_expansion_coefficient=f64[](numpy),
+      isothermal_joule_thomson=f64[](numpy),
+      joule_thomson=f64[](numpy),
+      gruneisen=f64[](numpy),
+      viscosity=f64[](numpy),
+      conductivity=f64[](numpy),
+      is_two_phase=f64[](numpy),
+      quality_mass=f64[](numpy),
+      quality_volume=f64[](numpy),
+      surface_tension=f64[](numpy),
+      subcooling=f64[](numpy),
+      superheating=f64[](numpy),
+      pressure_saturation=f64[](numpy),
+      temperature_saturation=f64[](numpy),
+      supersaturation_degree=f64[](numpy),
+      supersaturation_ratio=f64[](numpy),
+      mixture_ratio=f64[](numpy),
+      mass_frac_1=f64[](numpy),
+      mass_frac_2=f64[](numpy),
+      vol_frac_1=f64[](numpy),
+      vol_frac_2=f64[](numpy),
+      drho_dp=f64[](numpy),
+      drho_dh=f64[](numpy)
+    )
+  ),
+  geometry=<function get_nozzle_smd_divergent>,
+  p0_in=12000000.0,
+  T01_in=592.55,
+  T02_in=592.55,
+  length=0.6,
+  roughness=0.0,
+  Ma_in=f64[],
+  Ma_low=0.95,
+  Ma_high=1.05,
+  u1_in=6.148760057985783,
+  u2_in=6.14876620674584,
+  heat_transfer=0.0,
+  wall_friction=1.0,
+  mixture_ratio=f64[],
+  bubble_number=weak_f64[],
+  droplet_number=10000000000.0,
+  det_ref=f64[],
+  alpha_b=f64[],
+  alpha_d=f64[],
+  alphal_in=0.999999,
+  alphav_in=1e-06,
+  we_in_bubble=f64[],
+  we_in_droplet=f64[]
+)
+p_in:12000000.0 | rho_l_in:671.2370693248448 | h_l_in:1456638.554145585
+Pass-1 mdot error = nan
