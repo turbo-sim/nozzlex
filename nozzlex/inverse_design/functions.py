@@ -84,6 +84,51 @@ def march_from_p_ode(x_range: Sequence[float],
     }
 
 
+def export_circular_geometry(x_norm: Sequence[float],
+                             area_ratio: Sequence[float],
+                             length: float,
+                             throat_diameter: float,
+                             file_path=None) -> Dict[str, Any]:
+    """Turn a normalised design A/A*(x/L) into a dimensional circular nozzle.
+
+    The frictionless, adiabatic marching ODE is homogeneous in both dx and
+    dA/A, so the design fixes only the SHAPE A/A*(x/L): the axial length and
+    the absolute size are free and are set here by `length` and
+    `throat_diameter`.  The pressure/velocity/Mach profiles along x/L stay the
+    same; the mass flow scales with the throat area.
+
+        x = x_norm * length
+        r = 0.5 * throat_diameter * sqrt(A/A*)
+        A = pi * r**2
+
+    If `file_path` is given, writes a CSV with columns x, r, D, A (SI units).
+    This is the format read by `get_nozzle_from_csv` in
+    nozzle_hyperbolic.fvm_solver.geometry.
+    """
+    x_norm = np.asarray(x_norm, dtype=float)
+    area_ratio = np.asarray(area_ratio, dtype=float)
+
+    x = x_norm * length
+    r = 0.5 * throat_diameter * np.sqrt(area_ratio)
+    A = np.pi * r**2
+
+    # Wall half-angles, as a sanity check on the length / size choice
+    i_throat = int(np.argmin(r))
+    half_angle = np.degrees(np.arctan(np.gradient(r, x)))
+    geometry = {
+        'x': x, 'r': r, 'D': 2.0 * r, 'A': A,
+        'x_throat': x[i_throat],
+        'max_convergent_half_angle_deg': float(-half_angle[:i_throat + 1].min()),
+        'max_divergent_half_angle_deg': float(half_angle[i_throat:].max()),
+    }
+
+    if file_path is not None:
+        data = np.column_stack([x, r, 2.0 * r, A])
+        np.savetxt(file_path, data, delimiter=',', header='x,r,D,A', comments='')
+
+    return geometry
+
+
 def march_from_p_isentropic(x: Sequence[float], p: Sequence[float],
                             h_in: float, s_in: float, A_in: float, u_in: float,
                             fluid: str = 'Air', backend: str = 'HEOS') -> Dict[str, Any]:

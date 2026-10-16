@@ -6,7 +6,8 @@ import pandas as pd
 import yaml
 from pathlib import Path
 from nozzlex.inverse_design.nurbs_creator import nurbs_curve_points
-from nozzlex.inverse_design.functions import march_from_p_ode, march_from_p_isentropic
+from nozzlex.inverse_design.functions import (march_from_p_ode, march_from_p_isentropic,
+                                              export_circular_geometry)
 from nozzlex.inverse_design.plotting import plot_design_overview
 
 jxp.set_plot_options(grid=False)
@@ -22,6 +23,8 @@ u_in_default = config.get('u_in')
 inlet_opening_default = config.get('inlet_opening')
 width_default = config.get('width')
 isentropic_default = config.get('isentropic', True)
+inlet_thermodynamics = config.get('inlet_thermodynamics')
+geometry_export = config.get('geometry_export')
 
 cases_params = [
     (c['p0_total'], c['Q0'], c['p_out'],
@@ -45,7 +48,9 @@ for i, (p0_total, Q0, p_out, inlet_opening, width, u_in, isentropic) in enumerat
 
     # --- A. Thermodynamics & Inlet Setup ---
     A_in = width * inlet_opening
-    state_0 = fluid.get_state(jxp.PQ_INPUTS, p0_total, Q0)
+    input_type = getattr(jxp, inlet_thermodynamics)             # -> jxp.PT_INPUTS (the integer constant)
+    state_0 = fluid.get_state(input_type, p0_total, Q0)
+
     h_in = state_0.h - 0.5 * u_in**2
     state_in = fluid.get_state(jxp.HmassSmass_INPUTS, h_in, state_0.s)
     mdot = A_in * u_in * state_in.rho
@@ -64,12 +69,13 @@ for i, (p0_total, Q0, p_out, inlet_opening, width, u_in, isentropic) in enumerat
     res_p = np.interp(res_x, x_nodes, p_profile)
 
     # Extract Properties
-    rho, a, Q_plot, T, s, mach = [], [], [], [], [], []
+    rho, a, Q_plot, alpha_plot, T, s, mach = [], [], [], [], [], [], []
     for h_val, p_val, u_val in zip(out['h'], res_p, out['u']):
         try:
             st = fluid.get_state(jxp.HmassP_INPUTS, h_val, p_val)
             rho.append(st.rho); a.append(st.a); T.append(st.T); s.append(st.s); mach.append(u_val / st.a)
             Q_plot.append(st.Q if (0.0 < st.Q <= 1.0) else np.nan)
+            alpha_plot.append(st.void_fraction if (0.0 < st.Q <= 1.0) else np.nan)
         except:
             break
 
@@ -101,11 +107,30 @@ for i, (p0_total, Q0, p_out, inlet_opening, width, u_in, isentropic) in enumerat
     })
     all_geometry_data.append(df_case)
 
+    # --- 4b. Export dimensional circular geometry (for nozzle-hyperbolic) ---
+    if geometry_export:
+        if v_len < len(x_nodes):
+            print(f"  WARNING: design stopped at x/L = {curr_x_norm[-1]:.3f}, "
+                  f"exported geometry is truncated")
+        slug = case_label.lower().replace(' ', '_')
+        geo_path = results_dir / f'nozzle_geometry_{slug}.csv'
+        geo = export_circular_geometry(curr_x_norm, area_ratio,
+                                       length=geometry_export['length'],
+                                       throat_diameter=geometry_export['throat_diameter'],
+                                       file_path=geo_path)
+        print(f"  Geometry: L = {geo['x'][-1]:.3f} m, D_in = {geo['D'][0]*1e3:.2f} mm, "
+              f"D_throat = {geo['D'].min()*1e3:.2f} mm (x = {geo['x_throat']:.3f} m), "
+              f"D_out = {geo['D'][-1]*1e3:.2f} mm")
+        print(f"  Max wall half-angle: convergent {geo['max_convergent_half_angle_deg']:.2f} deg, "
+              f"divergent {geo['max_divergent_half_angle_deg']:.2f} deg")
+        print(f"  Saved -> {geo_path}")
+
     # --- 5. Collect Results for the Overview Plot ---
     case_result = {
         'x_norm': curr_x_norm,
         'p': res_p[:v_len],
         'Q': Q_plot,
+        'alpha': alpha_plot,
         'area_ratio': area_ratio,
         'u': out['u'][:v_len],
         'mach': mach,

@@ -1,4 +1,4 @@
-"""Overview plots (2x3 profile grid + T-s diagram) for a batch of inverse-design cases."""
+"""Overview plots (3x3 profile grid + T-s diagram) for a batch of inverse-design cases."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Sequence
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import numpy as np
 
 LABEL_FONTSIZE = 16
 
@@ -17,8 +18,8 @@ def plot_design_overview(
     colormap: str = "plasma",
     lw: float = 2.0,
 ):
-    """Plot the 2x3 profile grid (Height, Pressure, Quality / Velocity, Mach, Density)
-    and the T-s diagram for a batch of nozzle expansion cases.
+    """Plot the 3x3 profile grid (Height, Radius, Pressure / Quality, Void fraction,
+    Temperature / Velocity, Mach, Density) and the T-s diagram for a batch of nozzle expansion cases.
 
     Parameters
     ----------
@@ -27,9 +28,11 @@ def plot_design_overview(
     results : list of dict
         One dict per case, with keys 'x_norm', 'p', 'Q', 'area_ratio', 'u', 'mach',
         'rho', 's', 'T' (each a 1D array/sequence, all the same length per case).
-        'area_ratio' is the dimensionless A/A* profile (no assumed duct width).
+        'area_ratio' is the dimensionless A/A* profile (no assumed duct width);
+        the radius plot assumes a circular cross section, r/r* = sqrt(A/A*).
+        Optionally also 'alpha' (void fraction), drawn if present.
         Optionally also 'iso_x_norm', 'iso_p', 'iso_Q', 'iso_area_ratio', 'iso_u',
-        'iso_mach', 'iso_rho' — the closed-form isentropic (frictionless)
+        'iso_mach', 'iso_rho' (and optionally 'iso_alpha', 'iso_T') — the closed-form isentropic (frictionless)
         cross-check, drawn as a dashed black line per case.
     case_labels : sequence of str
         Legend label for each case, same length/order as `results`.
@@ -47,9 +50,10 @@ def plot_design_overview(
     num_cases = len(results)
     color_map = cm.get_cmap(colormap, num_cases)
 
-    # --- Profile grid: Height, Pressure, Quality / Velocity, Mach, Density ---
-    fig, axes = plt.subplots(2, 3, figsize=(11, 6), sharex=True)
-    ((ax_h, ax_p, ax_q), (ax_u, ax_m, ax_rho)) = axes
+    # --- Profile grid: Height, Radius, Pressure / Quality, Void fraction, Temperature
+    #     / Velocity, Mach, Density ---
+    fig, axes = plt.subplots(3, 3, figsize=(11, 9), sharex=True)
+    ((ax_h, ax_r, ax_p), (ax_q, ax_a, ax_T), (ax_u, ax_m, ax_rho)) = axes
     for ax in axes.flat:
         ax.set_box_aspect(0.7)
 
@@ -69,9 +73,13 @@ def plot_design_overview(
 
         ax_h.plot(x_norm, area_ratio / 2, color=case_color, lw=lw)
         ax_h.plot(x_norm, -area_ratio / 2, color=case_color, lw=lw)
+        ax_r.plot(x_norm, np.sqrt(np.asarray(area_ratio, dtype=float)), color=case_color, lw=lw)
         line, = ax_p.plot(x_norm, p, color=case_color, lw=lw, label=case_labels[i])
         case_handles.append(line)
         ax_q.plot(x_norm, Q, color=case_color, lw=lw)
+        if 'alpha' in res:
+            ax_a.plot(x_norm, res['alpha'], color=case_color, lw=lw)
+        ax_T.plot(x_norm, T, color=case_color, lw=lw)
         ax_u.plot(x_norm, u, color=case_color, lw=lw)
         ax_m.plot(x_norm, mach, color=case_color, lw=lw)
         ax_rho.plot(x_norm, rho, color=case_color, lw=lw)
@@ -88,7 +96,12 @@ def plot_design_overview(
                 iso_handles.append(iso_line)
             ax_h.plot(iso_x, res['iso_area_ratio'] / 2, 'k:', lw=1.5)
             ax_h.plot(iso_x, -res['iso_area_ratio'] / 2, 'k:', lw=1.5)
+            ax_r.plot(iso_x, np.sqrt(np.asarray(res['iso_area_ratio'], dtype=float)), 'k:', lw=1.5)
             ax_q.plot(iso_x, res['iso_Q'], 'k:', lw=1.5)
+            if 'iso_alpha' in res:
+                ax_a.plot(iso_x, res['iso_alpha'], 'k:', lw=1.5)
+            if 'iso_T' in res:
+                ax_T.plot(iso_x, res['iso_T'], 'k:', lw=1.5)
             ax_u.plot(iso_x, res['iso_u'], 'k:', lw=1.5)
             ax_m.plot(iso_x, res['iso_mach'], 'k:', lw=1.5)
             ax_rho.plot(iso_x, res['iso_rho'], 'k:', lw=1.5)
@@ -100,9 +113,12 @@ def plot_design_overview(
 
     # --- Formatting ---
     ax_h.set_ylabel('$A/A^*$ (-)')
+    ax_r.set_ylabel('$r/r^*$ (-)')
     ax_p.set_ylabel('$P$ (Pa)')
     ax_p.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
     ax_q.set_ylabel('$Q$ (-)')
+    ax_a.set_ylabel(r'$\alpha$ (-)')
+    ax_T.set_ylabel('$T$ (K)')
     ax_u.set_ylabel('$u$ (m/s)'); ax_u.set_xlabel('$x/L$ (-)')
     ax_m.set_ylabel('$M$ (-)'); ax_m.set_xlabel('$x/L$ (-)')
     ax_rho.set_ylabel(r'$\rho$ (kg/m³)'); ax_rho.set_xlabel('$x/L$ (-)')
@@ -111,6 +127,8 @@ def plot_design_overview(
         ax.set_xlim(0.0, 1.0)
     ax_p.set_ylim(bottom=0.5 * p_min_all)
     ax_q.set_ylim(0.0, 1.0)
+    ax_a.set_ylim(0.0, 1.0)
+    ax_r.set_ylim(bottom=0.0)
     ax_u.set_ylim(bottom=0.0)
     ax_m.set_ylim(bottom=0.0)
     ax_rho.set_ylim(bottom=0.0)
@@ -121,8 +139,10 @@ def plot_design_overview(
                ncol=len(all_handles), fontsize=LABEL_FONTSIZE, frameon=True)
 
     s_margin = 0.1 * (s_max_all - s_min_all)
-    ax_ts.set_xlim(s_min_all - s_margin, fluid.critical_point.s)
-    ax_ts.set_ylim(0.8 * T_out_min_all, fluid.critical_point.T)
+    # ax_ts.set_xlim(s_min_all - s_margin, fluid.critical_point.s)
+    # ax_ts.set_ylim(0.8 * T_out_min_all, fluid.critical_point.T)
+    ax_ts.set_xlim(7e2, 2e3)
+    ax_ts.set_ylim(230, 340)
     fig_ts.tight_layout()
 
     return fig, axes, fig_ts, ax_ts
