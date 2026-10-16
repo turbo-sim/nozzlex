@@ -80,3 +80,13 @@ venv/
 nozzlex/delayed_equilibrium/
 
 **/**cache**/
+
+data_assimilation/
+
+nakagawa/
+
+simoneau_1979/
+
+smd_hnem/
+
+notes/
